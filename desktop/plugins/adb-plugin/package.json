@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
+  "name": "flipper-plugin-adb-plugin",
+  "id": "adb-plugin",
+  "version": "1.0.0",
+  "main": "dist/bundle.js",
+  "flipperBundlerEntry": "src/index.tsx",
+  "license": "MIT",
+  "keywords": [
+    "flipper-plugin"
+  ],
+  "icon": "tools",
+  "title": "ADB Plugin",
+  "scripts": {
+    "lint": "flipper-pkg lint",
+    "prepack": "flipper-pkg lint && flipper-pkg bundle"
+  },
+  "peerDependencies": {
+    "flipper": "latest"
+  },
+  "devDependencies": {
+    "flipper": "latest",
+    "flipper-pkg": "latest"
+  }
+}
