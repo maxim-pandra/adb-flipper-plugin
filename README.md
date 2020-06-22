@@ -1,3 +1,15 @@
+# ADB Plugin for flipper
+
+Нужно перевести на английский
+
+Идея плагина повторить функции https://github.com/pbreault/adb-idea в виде плагина для flipper
+
+Разработка идет в ветке adb-plugin и переодически ребйзится на дев основного репозитория. 
+Работа в форке должна облегчить отладку плагина если вы захотите принять участие. 
+
+Для того чтобы запустить плагин просто запустить десктоп клиент. Плагин должен появиться в разделе с устройством
+
+
 # Flipper [![Build Status](https://travis-ci.org/facebook/flipper.svg?branch=master)](https://travis-ci.org/facebook/flipper) [![Android Maven Badge](https://img.shields.io/maven-metadata/v/https/jcenter.bintray.com/com/facebook/flipper/flipper/maven-metadata.xml.svg?color=green&label=android)](https://bintray.com/facebook/maven/com.facebook.flipper%3Aflipper) [![iOS](https://img.shields.io/cocoapods/v/FlipperKit.svg?label=iOS&color=blue)](https://cocoapods.org/pods/Flipper)
 
 Flipper (formerly Sonar) is a platform for debugging mobile apps on iOS and Android. Visualize, inspect, and control your apps from a simple desktop interface. Use Flipper as is or extend it using the plugin API.
