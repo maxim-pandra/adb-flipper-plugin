@@ -10,9 +10,11 @@ type State = {
     prompt: string;
 };
 
-const PACKAGE_NAME = 'ru.com.android.vending'//change for your package name
+const PACKAGE_NAME = 'com.facebook.flipper.sample'//change for your package name
 const COMMAND_STOP_APPLICATON = `am force-stop ${PACKAGE_NAME}`;
 const COMMAND_START_APPLICATON = `am start -n $(pm dump ${PACKAGE_NAME} | grep -A 1 MAIN | sed -n 2p | awk \'{print $2}\')`;
+
+const COMMAND_CLEAR_CACHE = `pm clear ${PACKAGE_NAME}`;
 
 
 const Container = styled(FlexColumn)({
@@ -31,11 +33,19 @@ const MyView = styled.div({
 export default class Example extends FlipperDevicePlugin<State, any, any> {
 
     static supportsDevice(device: Device) {
-        return device.os === 'Android' && device.deviceType === 'physical';
+        return device.os === 'Android';
     }
 
     init() {
     }
+
+    static Status = styled(Text)({
+        fontSize: 14,
+        fontFamily: 'monospace',
+        padding: '10px 5px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+    });
 
     executeShell = (callback: ShellCallBack, command: string) => {
         return (this.device as AndroidDevice).adb
@@ -55,6 +65,13 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
             console.log(output)
         }, COMMAND_START_APPLICATON);
     };
+
+    clearCache = () => {
+        this.executeShell((output: string) => {
+            console.log(output)
+        }, COMMAND_CLEAR_CACHE);
+
+    }
 
     runSetStatusBarStateCommand = (status: StatusBarState) => {
         this.executeShell((output: string) => {
@@ -77,11 +94,12 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
                 <MyView>
                     <Text>{this.state.prompt}</Text>
                 </MyView>
+                <Example.Status>Status: here should be status of the most recent adb command</Example.Status>
                 <NameForm />
                 <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.OPEN)}>Open status bar</Button>
                 <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.CLOSE)}> Close status bar</Button>
-                <Button onClick={this.sendMessage.bind(this, "34")}>Remvoke permissions</Button>
                 <Button onClick={this.restartApp.bind(this)}>Restart application</Button>
+                <Button onClick={this.clearCache.bind(this)}>Clear cache</Button>
 
             </Container >
         );
