@@ -1,8 +1,10 @@
 import { Button, Heading, FlipperDevicePlugin, FlexColumn, styled, colors, Text, Device, AndroidDevice } from 'flipper';
+import { AdbBridge, ClearDataCommand, RestartCommand } from './command/AllCommands'
 import React from 'react';
 import adb from 'adbkit';
 import { StatusBarState } from './StatusBarState'
 import { NameForm } from './NameForm'
+
 
 type ShellCallBack = (output: string) => any;
 
@@ -11,11 +13,6 @@ type State = {
 };
 
 const PACKAGE_NAME = 'com.facebook.flipper.sample'//change for your package name
-const COMMAND_STOP_APPLICATON = `am force-stop ${PACKAGE_NAME}`;
-const COMMAND_START_APPLICATON = `am start -n $(pm dump ${PACKAGE_NAME} | grep -A 1 MAIN | sed -n 2p | awk \'{print $2}\')`;
-
-const COMMAND_CLEAR_CACHE = `pm clear ${PACKAGE_NAME}`;
-
 
 const Container = styled(FlexColumn)({
     alignItems: 'center',
@@ -30,23 +27,28 @@ const MyView = styled.div({
     color: colors.red
 });
 
+const Status = styled(Text)({
+    fontSize: 14,
+    fontFamily: 'monospace',
+    padding: '10px 5px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+});
+
 export default class Example extends FlipperDevicePlugin<State, any, any> {
 
     static supportsDevice(device: Device) {
         return device.os === 'Android';
     }
 
+    state = {
+        prompt: 'Execute ADB command you like'
+    };
+
     init() {
     }
 
-    static Status = styled(Text)({
-        fontSize: 14,
-        fontFamily: 'monospace',
-        padding: '10px 5px',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-    });
-
+    //this will probably go to the AdbBridge in future
     executeShell = (callback: ShellCallBack, command: string) => {
         return (this.device as AndroidDevice).adb
             .shell(this.device.serial, command)
@@ -56,21 +58,14 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
             });
     };
 
-    restartApp = () => {
-        this.executeShell((output: string) => {
-            console.log(output)
-        }, COMMAND_STOP_APPLICATON);
+    adbBridge = new AdbBridge(this.executeShell);
 
-        this.executeShell((output: string) => {
-            console.log(output)
-        }, COMMAND_START_APPLICATON);
-    };
+    restartApp = () => {
+        new RestartCommand(this.adbBridge, PACKAGE_NAME).execute();
+    }
 
     clearCache = () => {
-        this.executeShell((output: string) => {
-            console.log(output)
-        }, COMMAND_CLEAR_CACHE);
-
+        new ClearDataCommand(this.adbBridge, PACKAGE_NAME).execute();
     }
 
     runSetStatusBarStateCommand = (status: StatusBarState) => {
@@ -79,14 +74,6 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
         }, `service call statusbar ${status}`);
     };
 
-    state = {
-        prompt: 'Execute ADB command you like'
-    };
-
-    sendMessage(message: string) {
-        console.log(`Command: ${message}`)
-    }
-
     render() {
         return (
             <Container>
@@ -94,13 +81,12 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
                 <MyView>
                     <Text>{this.state.prompt}</Text>
                 </MyView>
-                <Example.Status>Status: here should be status of the most recent adb command</Example.Status>
+                <Status>Status: here should be status of the most recent adb command</Status>
                 <NameForm />
                 <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.OPEN)}>Open status bar</Button>
                 <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.CLOSE)}> Close status bar</Button>
                 <Button onClick={this.restartApp.bind(this)}>Restart application</Button>
                 <Button onClick={this.clearCache.bind(this)}>Clear cache</Button>
-
             </Container >
         );
     }
