@@ -11,7 +11,7 @@ export class StartDefaultActivityCommand implements Command {
     }
 
     public execute(): void {
-        console.log(`ClearDataCommand: adb invoker should clear app data...`);
+        console.log(`StartDefaultActivityCommand: starting default activity...`);
         this.adbBridge.callAdb(this.getStartApplicationCommand(this.appId));
     }
 

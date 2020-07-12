@@ -1,8 +1,7 @@
 import { Button, Heading, FlipperDevicePlugin, FlexColumn, styled, colors, Text, Device, AndroidDevice } from 'flipper';
-import { AdbBridge, ClearDataCommand, RestartCommand } from './command/AllCommands'
+import { AdbBridge, ClearDataCommand, RestartCommand, KillCommand, ClearDataAndRestartCommand, UninstallCommand } from './command/AllCommands'
 import React from 'react';
 import adb from 'adbkit';
-import { StatusBarState } from './StatusBarState'
 import { NameForm } from './NameForm'
 
 
@@ -64,15 +63,21 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
         new RestartCommand(this.adbBridge, PACKAGE_NAME).execute();
     }
 
-    clearCache = () => {
+    clearData = () => {
         new ClearDataCommand(this.adbBridge, PACKAGE_NAME).execute();
     }
 
-    runSetStatusBarStateCommand = (status: StatusBarState) => {
-        this.executeShell((output: string) => {
-            console.log(output)
-        }, `service call statusbar ${status}`);
-    };
+    clearDataAndRestart = () => {
+        new ClearDataAndRestartCommand(this.adbBridge, PACKAGE_NAME).execute();
+    }
+
+    killApp = () => {
+        new KillCommand(this.adbBridge, PACKAGE_NAME).execute();
+    }
+
+    uninstallApp = () => {
+        new UninstallCommand(this.adbBridge, PACKAGE_NAME).execute();
+    }
 
     render() {
         return (
@@ -83,10 +88,11 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
                 </MyView>
                 <Status>Status: here should be status of the most recent adb command</Status>
                 <NameForm />
-                <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.OPEN)}>Open status bar</Button>
-                <Button onClick={this.runSetStatusBarStateCommand.bind(this, StatusBarState.CLOSE)}> Close status bar</Button>
-                <Button onClick={this.restartApp.bind(this)}>Restart application</Button>
-                <Button onClick={this.clearCache.bind(this)}>Clear cache</Button>
+                <Button onClick={this.restartApp.bind(this)}>Restart app</Button>
+                <Button onClick={this.clearData.bind(this)}>Clear App Data</Button>
+                <Button onClick={this.clearDataAndRestart.bind(this)}>Clear App Data and Restart</Button>
+                <Button onClick={this.uninstallApp.bind(this)}>Uninstall app</Button> 
+                <Button onClick={this.killApp.bind(this)}>Kill app</Button>
             </Container >
         );
     }

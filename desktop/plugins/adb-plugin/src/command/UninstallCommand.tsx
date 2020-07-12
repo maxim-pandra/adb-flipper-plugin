@@ -1,9 +1,9 @@
 import {AdbBridge} from './AdbBridge'
 import {Command} from './Command'
 
-const COMMAND_STOP_APPLICATON = `am force-stop `;
+const COMMAND_UNINSTALL_APPLICATON = `pm uninstall -k --user 0 `;
 
-export class KillCommand implements Command {
+export class UninstallCommand implements Command {
     private adbBridge: AdbBridge;
     private appId: string;
 
@@ -13,7 +13,7 @@ export class KillCommand implements Command {
     }
 
     public execute(): void {
-        console.log(`KillCommand: adb invoker should stop application`);
-        this.adbBridge.callAdb(COMMAND_STOP_APPLICATON + this.appId);
+        console.log(`UninstallCommand: adb invoker should uninstall application`);
+        this.adbBridge.callAdb(COMMAND_UNINSTALL_APPLICATON + this.appId);
     }
 }
