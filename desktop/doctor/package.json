@@ -1,6 +1,6 @@
 {
   "name": "flipper-doctor",
-  "version": "0.49.0",
+  "version": "0.50.0",
   "description": "Utility for checking for issues with a flipper installation",
   "main": "lib/index.js",
   "flipperBundlerEntry": "src",
@@ -10,11 +10,11 @@
     "@types/fb-watchman": "2.0.0",
     "@types/jest": "^26",
     "@typescript-eslint/eslint-plugin": "^2.8.0",
-    "eslint": "^6.6.0",
+    "eslint": "^7.4.0",
     "eslint-plugin-babel": "^5.3.0",
     "eslint-plugin-flowtype": "^4.7.0",
     "eslint-plugin-header": "^3.0.0",
-    "eslint-plugin-jsx-a11y": "^6.2.3",
+    "eslint-plugin-jsx-a11y": "^6.3.1",
     "eslint-plugin-prettier": "^3.1.1",
     "eslint-plugin-react": "^7.20.0",
     "jest": "^26",
@@ -39,7 +39,7 @@
   "author": "Facebook, Inc",
   "dependencies": {
     "@types/node": "^13.11.0",
-    "envinfo": "^7.4.0",
+    "envinfo": "^7.5.1",
     "fb-watchman": "^2.0.1"
   }
 }

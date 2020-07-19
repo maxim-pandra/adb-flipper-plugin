@@ -1,8 +1,8 @@
 {
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-react-devtools",
-  "id": "flipper-plugin-react-devtools",
-  "version": "0.49.0",
+  "id": "React",
+  "version": "0.50.0",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",

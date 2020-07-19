@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import {FlexColumn, FlexRow, styled} from 'flipper';
+import {FlexRow, styled, Layout} from 'flipper';
 import {connect} from 'react-redux';
 import TitleBar from './chrome/TitleBar';
 import MainSidebar2 from './chrome/mainsidebar/MainSidebar2';
@@ -65,19 +65,16 @@ type DispatchProps = {
   setActiveSheet: typeof setActiveSheet;
 };
 
-const MainContent = styled(FlexRow)({
-  height: 'calc(100vh - 38px)',
-});
-
+/**
+ * This wrapper is only needed for hacky plugins that place contents out of
+ * contents, like hermes debugger
+ */
 const PluginContent = styled(FlexRow)({
   width: '100%',
   height: '100%',
   position: 'relative',
 });
-
 PluginContent.displayName = 'App:PluginContent';
-MainContent.displayName = 'App:MainContent';
-
 type Props = StateFromProps & OwnProps & DispatchProps;
 
 export class App extends React.Component<Props> {
@@ -152,36 +149,42 @@ export class App extends React.Component<Props> {
 
   render() {
     return (
-      <FlexColumn grow={true}>
-        <TitleBar version={version} />
-        <DoctorBar />
-        <ErrorBar />
-        <Sheet>{this.getSheet}</Sheet>
-        <MainContent>
-          {this.props.leftSidebarVisible && <MainSidebar2 />}
-          <PluginContent>
-            {this.props.staticView != null ? (
-              React.createElement(this.props.staticView, {
-                logger: this.props.logger,
-              })
-            ) : (
-              <PluginContainer logger={this.props.logger} />
-            )}
-            <div
-              id="flipper-out-of-contents-container"
-              style={{
-                display: 'none',
-                position: 'absolute',
-                right: 0,
-                bottom: 0,
-                left: 0,
-                top: 0,
-              }}
-            />
-          </PluginContent>
-        </MainContent>
-        <StatusBar />
-      </FlexColumn>
+      <Layout.Top>
+        <Layout.Top>
+          <TitleBar version={version} />
+          <>
+            <Sheet>{this.getSheet}</Sheet>
+            <DoctorBar />
+            <ErrorBar />
+          </>
+        </Layout.Top>
+        <Layout.Bottom>
+          <Layout.Left>
+            {this.props.leftSidebarVisible && <MainSidebar2 />}
+            <PluginContent>
+              {this.props.staticView != null ? (
+                React.createElement(this.props.staticView, {
+                  logger: this.props.logger,
+                })
+              ) : (
+                <PluginContainer logger={this.props.logger} />
+              )}
+              <div
+                id="flipper-out-of-contents-container"
+                style={{
+                  display: 'none',
+                  position: 'absolute',
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  top: 0,
+                }}
+              />
+            </PluginContent>
+          </Layout.Left>
+          <StatusBar />
+        </Layout.Bottom>
+      </Layout.Top>
     );
   }
 }
