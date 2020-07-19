@@ -8,7 +8,8 @@ import { NameForm } from './NameForm'
 type ShellCallBack = (output: string) => any;
 
 type State = {
-    prompt: string;
+    applicationId: string;
+    inputText: string;
 };
 
 const PACKAGE_NAME = 'com.facebook.flipper.sample'//change for your package name
@@ -30,6 +31,8 @@ const Status = styled(Text)({
     fontSize: 14,
     fontFamily: 'monospace',
     padding: '10px 5px',
+    userSelect: 'auto',
+    WebkitUserSelect: 'auto',
     overflow: 'hidden',
     textOverflow: 'ellipsis'
 });
@@ -40,11 +43,26 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
         return device.os === 'Android';
     }
 
-    state = {
-        prompt: 'Execute ADB command you like'
-    };
+    constructor(props: any) {
+        super(props)
+
+        this.state = { applicationId: PACKAGE_NAME, inputText: '' };
+        this.handleChange = this.handleChange.bind(this);
+        this.handleSubmit = this.handleSubmit.bind(this);
+    }
 
     init() {
+    }
+
+    handleChange(event: any) {
+        console.log('hadleChange called ' + event)
+        this.setState({ inputText: event.target.value });
+    }
+
+    handleSubmit(event: any) {
+        console.log('hadleSubmit called ' + event)
+        this.setState({applicationId: this.state.inputText})
+        event.preventDefault();
     }
 
     //this will probably go to the AdbBridge in future
@@ -60,39 +78,39 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
     adbBridge = new AdbBridge(this.executeShell);
 
     restartApp = () => {
-        new RestartCommand(this.adbBridge, PACKAGE_NAME).execute();
+        new RestartCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
     clearData = () => {
-        new ClearDataCommand(this.adbBridge, PACKAGE_NAME).execute();
+        new ClearDataCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
     clearDataAndRestart = () => {
-        new ClearDataAndRestartCommand(this.adbBridge, PACKAGE_NAME).execute();
+        new ClearDataAndRestartCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
     killApp = () => {
-        new KillCommand(this.adbBridge, PACKAGE_NAME).execute();
+        new KillCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
     uninstallApp = () => {
-        new UninstallCommand(this.adbBridge, PACKAGE_NAME).execute();
+        new UninstallCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
     render() {
         return (
             <Container>
                 <Heading level={1}>Meat ADB Flipper</Heading>
+                <NameForm value={this.state.inputText} handleChange={this.handleChange} handleSubmit={this.handleSubmit}/>
                 <MyView>
-                    <Text>{this.state.prompt}</Text>
+                    <Text>{`AppId: ${this.state.applicationId}`}</Text>
                 </MyView>
-                <Status>Status: here should be status of the most recent adb command</Status>
-                <NameForm />
-                <Button onClick={this.restartApp.bind(this)}>Restart app</Button>
-                <Button onClick={this.clearData.bind(this)}>Clear App Data</Button>
-                <Button onClick={this.clearDataAndRestart.bind(this)}>Clear App Data and Restart</Button>
-                <Button onClick={this.uninstallApp.bind(this)}>Uninstall app</Button> 
-                <Button onClick={this.killApp.bind(this)}>Kill app</Button>
+                <Button style={{width: 200}}  onClick={this.restartApp.bind(this)}>Restart app</Button>
+                <Button style={{width: 200}} onClick={this.clearData.bind(this)}>Clear App Data</Button>
+                <Button style={{width: 200}}  onClick={this.clearDataAndRestart.bind(this)}>Clear App Data and Restart</Button>
+                <Button style={{width: 200}}  onClick={this.uninstallApp.bind(this)}>Uninstall app</Button> 
+                <Button style={{width: 200}}  onClick={this.killApp.bind(this)}>Kill app</Button>
+                <Status>This plugin is open source. All contributions are welcome. <a href='https://github.com/maxim-pandra/adb-flipper-plugin' target="_blank">https://github.com/maxim-pandra/adb-flipper-plugin</a></Status>
             </Container >
         );
     }
