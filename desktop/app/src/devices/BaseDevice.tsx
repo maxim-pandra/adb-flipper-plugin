@@ -8,41 +8,22 @@
  */
 
 import stream from 'stream';
-import {FlipperDevicePlugin} from 'flipper';
+import type {DeviceLogListener} from 'flipper';
 import {sortPluginsByName} from '../utils/pluginUtils';
-
-export type LogLevel =
-  | 'unknown'
-  | 'verbose'
-  | 'debug'
-  | 'info'
-  | 'warn'
-  | 'error'
-  | 'fatal';
-
-export type DeviceLogEntry = {
-  readonly date: Date;
-  readonly pid: number;
-  readonly tid: number;
-  readonly app?: string;
-  readonly type: LogLevel;
-  readonly tag: string;
-  readonly message: string;
-};
+import {
+  DeviceLogEntry,
+  SandyDevicePluginInstance,
+  SandyPluginDefinition,
+  DeviceType,
+} from 'flipper-plugin';
+import type {DevicePluginMap, FlipperDevicePlugin} from '../plugin';
+import {getFlipperLibImplementation} from '../utils/flipperLibImplementation';
 
 export type DeviceShell = {
   stdout: stream.Readable;
   stderr: stream.Readable;
   stdin: stream.Writable;
 };
-
-export type DeviceLogListener = (entry: DeviceLogEntry) => void;
-
-export type DeviceType =
-  | 'emulator'
-  | 'physical'
-  | 'archivedEmulator'
-  | 'archivedPhysical';
 
 export type DeviceExport = {
   os: OS;
@@ -84,7 +65,12 @@ export default class BaseDevice {
   source = '';
 
   // sorted list of supported device plugins
-  devicePlugins!: string[];
+  devicePlugins: string[] = [];
+
+  sandyPluginStates: Map<string, SandyDevicePluginInstance> = new Map<
+    string,
+    SandyDevicePluginInstance
+  >();
 
   supportsOS(os: OS) {
     return os.toLowerCase() === this.os.toLowerCase();
@@ -104,10 +90,10 @@ export default class BaseDevice {
     };
   }
 
-  teardown() {}
-
-  supportedColumns(): Array<string> {
-    return ['date', 'pid', 'tid', 'tag', 'message', 'type', 'time'];
+  teardown() {
+    for (const instance of this.sandyPluginStates.values()) {
+      instance.destroy();
+    }
   }
 
   addLogListener(callback: DeviceLogListener): Symbol {
@@ -178,10 +164,34 @@ export default class BaseDevice {
     return null;
   }
 
-  loadDevicePlugins(devicePlugins?: Map<string, typeof FlipperDevicePlugin>) {
-    this.devicePlugins = Array.from(devicePlugins ? devicePlugins.values() : [])
-      .filter((plugin) => plugin.supportsDevice(this))
-      .sort(sortPluginsByName)
-      .map((plugin) => plugin.id);
+  loadDevicePlugins(devicePlugins?: DevicePluginMap) {
+    if (!devicePlugins) {
+      return;
+    }
+    const plugins = Array.from(devicePlugins.values());
+    plugins.sort(sortPluginsByName);
+    for (const plugin of plugins) {
+      this.loadDevicePlugin(plugin);
+    }
+  }
+
+  loadDevicePlugin(plugin: typeof FlipperDevicePlugin | SandyPluginDefinition) {
+    if (plugin instanceof SandyPluginDefinition) {
+      if (plugin.asDevicePluginModule().supportsDevice(this as any)) {
+        this.devicePlugins.push(plugin.id);
+        this.sandyPluginStates.set(
+          plugin.id,
+          new SandyDevicePluginInstance(
+            getFlipperLibImplementation(),
+            plugin,
+            this,
+          ),
+        ); // TODO T70582933: pass initial state if applicable
+      }
+    } else {
+      if (plugin.supportsDevice(this)) {
+        this.devicePlugins.push(plugin.id);
+      }
+    }
   }
 }

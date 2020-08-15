@@ -29,8 +29,12 @@ import InspectorSidebar from './InspectorSidebar';
 import Search from './Search';
 import ProxyArchiveClient from './ProxyArchiveClient';
 import React from 'react';
-import {VisualizerPortal} from 'flipper';
-import {getFlipperMediaCDN} from 'flipper';
+import {
+  VisualizerPortal,
+  getFlipperMediaCDN,
+  IDEFileResolver,
+  IDEType,
+} from 'flipper';
 
 type State = {
   init: boolean;
@@ -56,6 +60,15 @@ export type PersistedState = {
 };
 type ClientGetNodesCalls = 'getNodes' | 'getAXNodes';
 type ClientMethodCalls = 'getRoot' | 'getAXRoot' | ClientGetNodesCalls;
+
+type ClassFileParams = {
+  fileName: string;
+  className: string;
+  dirRoot: string;
+  repo: string;
+  lineNumber: number;
+  ide: IDEType;
+};
 
 export default class LayoutPlugin extends FlipperPlugin<
   State,
@@ -205,6 +218,10 @@ export default class LayoutPlugin extends FlipperPlugin<
       }
     });
 
+    this.client.subscribe('openInIDE', (params: ClassFileParams) => {
+      this.openInIDE(params);
+    });
+
     if (this.props.isArchivedDevice) {
       this.getDevice()
         .then((d) => {
@@ -223,11 +240,30 @@ export default class LayoutPlugin extends FlipperPlugin<
 
     this.setState({
       init: true,
-      selectedElement: this.props.deepLinkPayload
-        ? this.props.deepLinkPayload
-        : null,
+      selectedElement:
+        typeof this.props.deepLinkPayload === 'string'
+          ? this.props.deepLinkPayload
+          : null,
     });
   }
+
+  openInIDE = async (params: ClassFileParams) => {
+    const paths = await IDEFileResolver.resolveFullPathsFromMyles(
+      params.fileName,
+      params.dirRoot,
+    );
+    const selectedPath = IDEFileResolver.getBestPath(paths, params.className);
+    let ide: IDEType = Number(IDEType[params.ide]);
+    if (Number.isNaN(ide)) {
+      ide = IDEType.AS; // default value
+    }
+    IDEFileResolver.openInIDE(
+      selectedPath,
+      ide,
+      params.repo,
+      params.lineNumber,
+    );
+  };
 
   onToggleTargetMode = () => {
     const inTargetMode = !this.state.inTargetMode;
@@ -426,7 +462,11 @@ export default class LayoutPlugin extends FlipperPlugin<
                 this.setState({searchResults})
               }
               inAXMode={this.state.inAXMode}
-              initialQuery={this.props.deepLinkPayload}
+              initialQuery={
+                typeof this.props.deepLinkPayload === 'string'
+                  ? this.props.deepLinkPayload
+                  : null
+              }
             />
           </Toolbar>
           <Layout.Right>

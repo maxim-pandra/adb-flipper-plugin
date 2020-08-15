@@ -33,6 +33,7 @@ export {
 export {PluginClient, Props} from './plugin';
 export {default as Client} from './Client';
 export {MetricType} from './utils/exportMetrics';
+export {reportUsage} from './utils/metrics';
 export {default as promiseTimeout} from './utils/promiseTimeout';
 export {clipboard, remote, OpenDialogOptions} from 'electron';
 export {default as SupportRequestFormV2} from './fb-stubs/SupportRequestFormV2';
@@ -44,11 +45,7 @@ export {getPluginKey, getPersistedState} from './utils/pluginUtils';
 export {Idler} from './utils/Idler';
 export {Store, MiddlewareAPI, State as ReduxState} from './reducers/index';
 export {default as BaseDevice} from './devices/BaseDevice';
-export {
-  DeviceLogListener,
-  DeviceLogEntry,
-  LogLevel,
-} from './devices/BaseDevice';
+export {DeviceLogEntry, LogLevel, DeviceLogListener} from 'flipper-plugin';
 export {shouldParseAndroidLog} from './utils/crashReporterUtility';
 export {default as isProduction} from './utils/isProduction';
 export {createTablePlugin} from './createTablePlugin';
@@ -120,7 +117,10 @@ export {default as Orderable} from './ui/components/Orderable';
 export {default as VirtualList} from './ui/components/VirtualList';
 export {Component, PureComponent} from 'react';
 export {default as ContextMenuProvider} from './ui/components/ContextMenuProvider';
-export {default as ContextMenu} from './ui/components/ContextMenu';
+export {
+  default as ContextMenu,
+  MenuTemplate,
+} from './ui/components/ContextMenu';
 export {FileListFile, FileListFiles} from './ui/components/FileList';
 export {default as FileList} from './ui/components/FileList';
 export {default as File} from './ui/components/File';
@@ -196,3 +196,4 @@ export {useLocalStorage} from './utils/useLocalStorage';
 export {checkIdbIsInstalled} from './utils/iOSContainerUtility';
 // Sidebar extensions should be last so they can import anything from here.
 export {default as SidebarExtensions} from './fb-stubs/LayoutInspectorSidebarExtensions';
+export {IDEFileResolver, IDEType} from './fb-stubs/IDEFileResolver';

@@ -16,6 +16,7 @@ import {
   act as testingLibAct,
 } from '@testing-library/react';
 import {queries} from '@testing-library/dom';
+import {TestUtils} from 'flipper-plugin';
 
 import {
   selectPlugin,
@@ -34,8 +35,9 @@ import {Logger} from '../fb-interfaces/Logger';
 import {PluginDefinition} from '../plugin';
 import {registerPlugins} from '../reducers/plugins';
 import PluginContainer from '../PluginContainer';
-import {getPluginKey} from '../utils/pluginUtils';
+import {getPluginKey, isDevicePluginDefinition} from '../utils/pluginUtils';
 import {getInstance} from '../fb-stubs/Logger';
+import {setFlipperLibImplementation} from '../utils/flipperLibImplementation';
 
 type MockFlipperResult = {
   client: Client;
@@ -62,6 +64,8 @@ export async function createMockFlipperWithPlugin(
 ): Promise<MockFlipperResult> {
   const store = createStore(rootReducer);
   const logger = getInstance();
+  setFlipperLibImplementation(TestUtils.createMockFlipperLib());
+
   store.dispatch(registerPlugins([pluginClazz]));
 
   function createDevice(serial: string): BaseDevice {
@@ -75,6 +79,7 @@ export async function createMockFlipperWithPlugin(
       type: 'REGISTER_DEVICE',
       payload: device,
     });
+    device.loadDevicePlugins(store.getState().plugins.devicePlugins);
     return device;
   }
 
@@ -102,7 +107,7 @@ export async function createMockFlipperWithPlugin(
       null, // create a stub connection to avoid this plugin to be archived?
       logger,
       store,
-      [pluginClazz.id],
+      isDevicePluginDefinition(pluginClazz) ? [] : [pluginClazz.id],
       device,
     );
 
@@ -125,10 +130,7 @@ export async function createMockFlipperWithPlugin(
         case 'getPlugins':
           // assuming this plugin supports all plugins for now
           return {
-            plugins: [
-              ...store.getState().plugins.clientPlugins.keys(),
-              ...store.getState().plugins.devicePlugins.keys(),
-            ],
+            plugins: [...store.getState().plugins.clientPlugins.keys()],
           };
         case 'getBackgroundPlugins':
           return {plugins: []};
@@ -142,6 +144,7 @@ export async function createMockFlipperWithPlugin(
 
     // enable the plugin
     if (
+      !isDevicePluginDefinition(pluginClazz) &&
       !store
         .getState()
         .connections.userStarredPlugins[client.query.app]?.includes(
@@ -207,22 +210,32 @@ type Renderer = RenderResult<typeof queries>;
 
 export async function renderMockFlipperWithPlugin(
   pluginClazz: PluginDefinition,
+  options?: MockOptions,
 ): Promise<
   MockFlipperResult & {
     renderer: Renderer;
     act: (cb: () => void) => void;
   }
 > {
-  const args = await createMockFlipperWithPlugin(pluginClazz);
+  const args = await createMockFlipperWithPlugin(pluginClazz, options);
 
   function selectTestPlugin(store: Store, client: Client) {
     store.dispatch(
-      selectPlugin({
-        selectedPlugin: pluginClazz.id,
-        selectedApp: client.query.app,
-        deepLinkPayload: null,
-        selectedDevice: store.getState().connections.selectedDevice!,
-      }),
+      selectPlugin(
+        isDevicePluginDefinition(pluginClazz)
+          ? {
+              selectedPlugin: pluginClazz.id,
+              selectedApp: null,
+              deepLinkPayload: null,
+              selectedDevice: store.getState().connections.selectedDevice!,
+            }
+          : {
+              selectedPlugin: pluginClazz.id,
+              selectedApp: client.query.app,
+              deepLinkPayload: null,
+              selectedDevice: store.getState().connections.selectedDevice!,
+            },
+      ),
     );
   }
 

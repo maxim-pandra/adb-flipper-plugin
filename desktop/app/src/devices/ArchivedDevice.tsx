@@ -8,18 +8,9 @@
  */
 
 import BaseDevice from './BaseDevice';
-import {DeviceType, OS, DeviceShell, DeviceLogEntry} from './BaseDevice';
+import type {DeviceLogEntry, DeviceType} from 'flipper-plugin';
+import {OS, DeviceShell} from './BaseDevice';
 import {SupportFormRequestDetailsState} from '../reducers/supportForm';
-
-function normalizeArchivedDeviceType(deviceType: DeviceType): DeviceType {
-  let archivedDeviceType = deviceType;
-  if (archivedDeviceType === 'emulator') {
-    archivedDeviceType = 'archivedEmulator';
-  } else if (archivedDeviceType === 'physical') {
-    archivedDeviceType = 'archivedPhysical';
-  }
-  return archivedDeviceType;
-}
 
 export default class ArchivedDevice extends BaseDevice {
   constructor(options: {
@@ -32,12 +23,7 @@ export default class ArchivedDevice extends BaseDevice {
     source?: string;
     supportRequestDetails?: SupportFormRequestDetailsState;
   }) {
-    super(
-      options.serial,
-      normalizeArchivedDeviceType(options.deviceType),
-      options.title,
-      options.os,
-    );
+    super(options.serial, options.deviceType, options.title, options.os);
     this.logs = options.logEntries;
     this.source = options.source || '';
     this.supportRequestDetails = options.supportRequestDetails;

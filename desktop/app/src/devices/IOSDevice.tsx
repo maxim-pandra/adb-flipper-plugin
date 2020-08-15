@@ -7,7 +7,7 @@
  * @format
  */
 
-import {DeviceType, LogLevel, DeviceLogEntry} from './BaseDevice';
+import type {LogLevel, DeviceLogEntry, DeviceType} from 'flipper-plugin';
 import child_process, {ChildProcess} from 'child_process';
 import BaseDevice from './BaseDevice';
 import JSONStream from 'JSONStream';
@@ -73,10 +73,6 @@ export default class IOSDevice extends BaseDevice {
     if (this.log) {
       this.log.kill();
     }
-  }
-
-  supportedColumns(): Array<string> {
-    return ['date', 'pid', 'tid', 'tag', 'message', 'type', 'time'];
   }
 
   startLogListener(retries: number = 3) {

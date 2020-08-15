@@ -91,8 +91,8 @@ public class DebugSectionDescriptor extends NodeDescriptor<DebugSection> {
     return DataUtils.getPropData(section);
   }
 
-  private static @Nullable FlipperObject getStateData(DebugSection node) throws Exception {
-    return DataUtils.getStateData(node, node.getStateContainer());
+  private static @Nullable FlipperObject getStateData(DebugSection node) {
+    return DataUtils.getStateData(node.getStateContainer());
   }
 
   @Override
@@ -105,6 +105,13 @@ public class DebugSectionDescriptor extends NodeDescriptor<DebugSection> {
     // TODO T39526148
     final List<Named<String>> attrs = new ArrayList<>();
     return attrs;
+  }
+
+  @Override
+  public FlipperObject getExtraInfo(DebugSection node) {
+    FlipperObject.Builder extraInfo = new FlipperObject.Builder();
+    extraInfo.put("className", node.getSection().getClass().getName());
+    return extraInfo.build();
   }
 
   @Override

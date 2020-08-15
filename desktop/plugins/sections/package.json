@@ -1,15 +1,16 @@
 {
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-sections",
-  "id": "flipper-plugin-sections",
+  "id": "Sections",
+  "icon": "tree",
   "title": "Sections",
   "bugs": {
     "email": "oncall+ios_componentkit@xmail.facebook.com",
     "url": "https://fb.workplace.com/groups/componentkit/"
   },
-  "version": "0.50.0",
+  "version": "0.52.1",
   "main": "dist/bundle.js",
-  "flipperBundlerEntry": "index.js",
+  "flipperBundlerEntry": "src/index.tsx",
   "license": "MIT",
   "keywords": [
     "flipper-plugin"
@@ -17,6 +18,10 @@
   "gatekeeper": "flipper_sections_plugin",
   "dependencies": {
     "react-d3-tree": "^1.12.1"
+  },
+  "peerDependencies": {
+    "flipper": "0.52.1",
+    "flipper-plugin": "0.52.1"
   },
   "resolutions": {
     "react-d3-tree/d3": "file:./d3"

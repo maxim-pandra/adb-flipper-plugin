@@ -101,7 +101,7 @@ type StateFromProps = {
   activePlugin: PluginDefinition | undefined;
   target: Client | BaseDevice | null;
   pluginKey: string | null;
-  deepLinkPayload: string | null;
+  deepLinkPayload: unknown;
   selectedApp: string | null;
   isArchivedDevice: boolean;
   pendingMessages: Message[] | undefined;
@@ -113,7 +113,7 @@ type DispatchFromProps = {
   selectPlugin: (payload: {
     selectedPlugin: string | null;
     selectedApp?: string | null;
-    deepLinkPayload: string | null;
+    deepLinkPayload: unknown;
   }) => any;
   setPluginState: (payload: {pluginKey: string; state: any}) => void;
   setStaticView: (payload: StaticView) => void;
@@ -178,6 +178,13 @@ class PluginContainer extends PureComponent<Props, State> {
 
   componentDidUpdate() {
     this.processMessageQueue();
+    // make sure deeplinks are propagated
+    const {deepLinkPayload, target, activePlugin} = this.props;
+    if (deepLinkPayload && activePlugin && target) {
+      target.sandyPluginStates
+        .get(activePlugin.id)
+        ?.triggerDeepLink(deepLinkPayload);
+    }
   }
 
   processMessageQueue() {
@@ -241,7 +248,6 @@ class PluginContainer extends PureComponent<Props, State> {
       pluginIsEnabled,
     } = this.props;
     if (!activePlugin || !target || !pluginKey) {
-      console.warn(`No selected plugin. Rendering empty!`);
       return null;
     }
 
@@ -336,18 +342,13 @@ class PluginContainer extends PureComponent<Props, State> {
     }
     let pluginElement: null | React.ReactElement<any>;
     if (isSandyPlugin(activePlugin)) {
-      if (target instanceof Client) {
-        // Make sure we throw away the container for different pluginKey!
-        pluginElement = (
-          <SandyPluginRenderer
-            key={pluginKey}
-            plugin={target.sandyPluginStates.get(activePlugin.id)!}
-          />
-        );
-      } else {
-        // TODO: target might be a device as well, support that T68738317
-        pluginElement = null;
-      }
+      // Make sure we throw away the container for different pluginKey!
+      pluginElement = (
+        <SandyPluginRenderer
+          key={pluginKey}
+          plugin={target.sandyPluginStates.get(activePlugin.id)!}
+        />
+      );
     } else {
       const props: PluginProps<Object> & {
         key: string;
@@ -373,7 +374,7 @@ class PluginContainer extends PureComponent<Props, State> {
         setPersistedState: (state) => setPluginState({pluginKey, state}),
         target,
         deepLinkPayload: this.props.deepLinkPayload,
-        selectPlugin: (pluginID: string, deepLinkPayload: string | null) => {
+        selectPlugin: (pluginID: string, deepLinkPayload: unknown) => {
           const {target} = this.props;
           // check if plugin will be available
           if (

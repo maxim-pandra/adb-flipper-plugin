@@ -7,17 +7,18 @@
  * @format
  */
 
-import React, {Component, ReactElement} from 'react';
+import React, {Component, ReactElement, RefObject} from 'react';
 import {
   Glyph,
-  Popover,
   FlexColumn,
   FlexRow,
   Button,
   Checkbox,
   styled,
   Input,
+  Link,
 } from 'flipper';
+import Popover from '../ui/components/Popover2';
 import GK from '../fb-stubs/GK';
 import * as UserFeedback from '../fb-stubs/UserFeedback';
 import {FeedbackPrompt} from '../fb-stubs/UserFeedback';
@@ -143,7 +144,7 @@ class FeedbackComponent extends Component<
     this.setState({rating: newRating, nextAction: nextAction});
     this.props.submitRating(newRating);
     if (nextAction === 'finished') {
-      setTimeout(this.props.close, 1500);
+      setTimeout(this.props.close, 5000);
     }
   }
   onCommentSubmitted(comment: string) {
@@ -261,7 +262,15 @@ class FeedbackComponent extends Component<
         ];
         break;
       case 'finished':
-        body = [<Row key="thanks">Thanks!</Row>];
+        body = [
+          <Row key="thanks">
+            Thanks for the feedback! You can now help
+            <Link href="https://www.internalfb.com/intern/papercuts/?application=flipper">
+              prioritize bugs and features for Flipper in Papercuts
+            </Link>
+          </Row>,
+          dismissRow(this.props.dismiss),
+        ];
         break;
       default: {
         console.error('Illegal state: nextAction: ' + this.state.nextAction);
@@ -294,6 +303,8 @@ class RatingButton extends Component<PropsFromState, State> {
     isShown: false,
     hasTriggered: false,
   };
+
+  glyphRef: RefObject<HTMLDivElement> = React.createRef();
 
   constructor(props: PropsFromState) {
     super(props);
@@ -351,7 +362,11 @@ class RatingButton extends Component<PropsFromState, State> {
     }
     return (
       <div style={{position: 'relative'}}>
-        <div onClick={this.onClick.bind(this)}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={this.onClick.bind(this)}
+          ref={this.glyphRef}>
           <Glyph
             name="star"
             color="grey"
@@ -359,20 +374,17 @@ class RatingButton extends Component<PropsFromState, State> {
           />
         </div>
         {this.state.isShown ? (
-          <Popover
-            onDismiss={() => {}}
-            children={
-              <FeedbackComponent
-                submitRating={this.submitRating.bind(this)}
-                submitComment={this.submitComment.bind(this)}
-                close={() => {
-                  this.setState({isShown: false});
-                }}
-                dismiss={this.onClick.bind(this)}
-                promptData={promptData}
-              />
-            }
-          />
+          <Popover id="rating-button" targetRef={this.glyphRef}>
+            <FeedbackComponent
+              submitRating={this.submitRating.bind(this)}
+              submitComment={this.submitComment.bind(this)}
+              close={() => {
+                this.setState({isShown: false});
+              }}
+              dismiss={this.onClick.bind(this)}
+              promptData={promptData}
+            />
+          </Popover>
         ) : null}
       </div>
     );

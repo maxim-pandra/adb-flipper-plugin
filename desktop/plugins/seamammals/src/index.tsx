@@ -41,10 +41,6 @@ function renderSidebar(row: Row) {
   );
 }
 
-type State = {
-  selectedID: string | null;
-};
-
 type PersistedState = {
   [key: string]: Row;
 };
@@ -52,6 +48,28 @@ type PersistedState = {
 export function plugin(client: FlipperClient<Events, {}>) {
   const rows = createState<PersistedState>({}, {persist: 'rows'});
   const selectedID = createState<string | null>(null, {persist: 'selection'});
+
+  client.addMenuEntry(
+    {
+      label: 'Reset Selection',
+      topLevelMenu: 'Edit',
+      handler: () => {
+        selectedID.set(null);
+      },
+    },
+    {
+      action: 'createPaste',
+      handler: async () => {
+        const selection = selectedID.get();
+        if (selection) {
+          const url = await client.createPaste(
+            JSON.stringify(rows.get()[selection], null, 2),
+          );
+          alert(url); // TODO: use notifications T69990351
+        }
+      },
+    },
+  );
 
   client.onMessage('newRow', (row) => {
     rows.update((draft) => {

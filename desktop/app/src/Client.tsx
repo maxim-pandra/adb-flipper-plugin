@@ -40,6 +40,7 @@ import {debounce} from 'lodash';
 import {batch} from 'react-redux';
 import {SandyPluginInstance} from 'flipper-plugin';
 import {flipperMessagesClientPlugin} from './utils/self-inspection/plugins/FlipperMessagesClientPlugin';
+import {getFlipperLibImplementation} from './utils/flipperLibImplementation';
 
 type Plugins = Array<string>;
 
@@ -68,10 +69,14 @@ const handleError = (store: Store, device: BaseDevice, error: ErrorType) => {
   if (isProduction()) {
     return;
   }
-  const crashReporterPlugin = store
+  const crashReporterPlugin: typeof FlipperDevicePlugin = store
     .getState()
-    .plugins.devicePlugins.get('CrashReporter');
+    .plugins.devicePlugins.get('CrashReporter') as any;
   if (!crashReporterPlugin) {
+    return;
+  }
+  if (!crashReporterPlugin.persistedStateReducer) {
+    console.error('CrashReporterPlugin persistedStateReducer broken'); // Make sure we update this code if we ever convert it to Sandy
     return;
   }
 
@@ -306,7 +311,12 @@ export default class Client extends EventEmitter {
         // TODO: needs to be wrapped in error tracking T68955280
         this.sandyPluginStates.set(
           plugin.id,
-          new SandyPluginInstance(this, plugin, initialStates[pluginId]),
+          new SandyPluginInstance(
+            getFlipperLibImplementation(),
+            plugin,
+            this,
+            initialStates[pluginId],
+          ),
         );
       }
     });
@@ -351,7 +361,7 @@ export default class Client extends EventEmitter {
       // TODO: needs to be wrapped in error tracking T68955280
       this.sandyPluginStates.set(
         plugin.id,
-        new SandyPluginInstance(this, plugin),
+        new SandyPluginInstance(getFlipperLibImplementation(), plugin, this),
       );
     }
   }

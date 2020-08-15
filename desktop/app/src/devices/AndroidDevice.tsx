@@ -7,11 +7,12 @@
  * @format
  */
 
-import BaseDevice, {DeviceType, LogLevel} from './BaseDevice';
+import BaseDevice from './BaseDevice';
 import adb, {Client as ADBClient} from 'adbkit';
 import {Priority} from 'adbkit-logcat';
 import ArchivedDevice from './ArchivedDevice';
 import {createWriteStream} from 'fs';
+import type {LogLevel, DeviceType} from 'flipper-plugin';
 
 const DEVICE_RECORDING_DIR = '/sdcard/flipper_recorder';
 
@@ -68,10 +69,6 @@ export default class AndroidDevice extends BaseDevice {
   sdkVersion: string | undefined = undefined;
   pidAppMapping: {[key: number]: string} = {};
   private recordingProcess?: Promise<string>;
-
-  supportedColumns(): Array<string> {
-    return ['date', 'pid', 'tid', 'tag', 'message', 'type', 'time'];
-  }
 
   reverse(ports: [number, number]): Promise<void> {
     return Promise.all(

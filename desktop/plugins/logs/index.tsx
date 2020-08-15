@@ -9,9 +9,6 @@
 
 import {
   TableBodyRow,
-  TableColumnOrder,
-  TableColumnSizes,
-  TableColumns,
   TableRowSortOrder,
   Props as PluginProps,
   BaseAction,
@@ -21,13 +18,11 @@ import {
 import {Counter} from './LogWatcher';
 
 import {
-  Text,
   ManagedTableClass,
   Button,
   colors,
   ContextMenu,
   FlexColumn,
-  Glyph,
   DetailSidebar,
   FlipperDevicePlugin,
   SearchableTable,
@@ -36,10 +31,12 @@ import {
   createPaste,
   textContent,
   KeyboardActions,
+  MenuTemplate,
 } from 'flipper';
 import LogWatcher from './LogWatcher';
 import React from 'react';
-import {MenuTemplate} from 'app/src/ui/components/ContextMenu';
+import {Icon, LogCount, HiddenScrollText} from './logComponents';
+import {pad, getLineCount} from './logUtils';
 
 const LOG_WATCHER_LOCAL_STORAGE_KEY = 'LOG_WATCHER_LOCAL_STORAGE_KEY';
 
@@ -51,7 +48,6 @@ type Entries = ReadonlyArray<{
 type BaseState = {
   readonly rows: ReadonlyArray<TableBodyRow>;
   readonly entries: Entries;
-  readonly key2entry: {readonly [key: string]: DeviceLogEntry};
 };
 
 type AdditionalState = {
@@ -63,33 +59,6 @@ type AdditionalState = {
 type State = BaseState & AdditionalState;
 
 type PersistedState = {};
-
-const Icon = styled(Glyph)({
-  marginTop: 5,
-});
-
-function getLineCount(str: string): number {
-  let count = 1;
-  if (!(typeof str === 'string')) {
-    return 0;
-  }
-  for (let i = 0; i < str.length; i++) {
-    if (str[i] === '\n') {
-      count++;
-    }
-  }
-  return count;
-}
-
-function keepKeys<A>(obj: A, keys: Array<string>): A {
-  const result: A = {} as A;
-  for (const key in obj) {
-    if (keys.includes(key)) {
-      result[key] = obj[key];
-    }
-  }
-  return result;
-}
 
 const COLUMN_SIZE = {
   type: 40,
@@ -223,59 +192,20 @@ const DEFAULT_FILTERS = [
   },
 ];
 
-const HiddenScrollText = styled(Text)({
-  alignSelf: 'baseline',
-  userSelect: 'none',
-  lineHeight: '130%',
-  marginTop: 5,
-  paddingBottom: 3,
-  '&::-webkit-scrollbar': {
-    display: 'none',
-  },
-});
-
-const LogCount = styled.div<{backgroundColor: string}>(({backgroundColor}) => ({
-  backgroundColor,
-  borderRadius: '999em',
-  fontSize: 11,
-  marginTop: 4,
-  minWidth: 16,
-  height: 16,
-  color: colors.white,
-  textAlign: 'center',
-  lineHeight: '16px',
-  paddingLeft: 4,
-  paddingRight: 4,
-  textOverflow: 'ellipsis',
-  overflow: 'hidden',
-  whiteSpace: 'nowrap',
-}));
-
-function pad(chunk: any, len: number): string {
-  let str = String(chunk);
-  while (str.length < len) {
-    str = `0${str}`;
-  }
-  return str;
-}
-
 export function addEntriesToState(
   items: Entries,
   state: BaseState = {
     rows: [],
     entries: [],
-    key2entry: {},
   } as const,
   addDirection: 'up' | 'down' = 'up',
 ): BaseState {
   const rows = [...state.rows];
   const entries = [...state.entries];
-  const key2entry = {...state.key2entry};
 
   for (let i = 0; i < items.length; i++) {
     const {entry, row} = items[i];
     entries.push({row, entry});
-    key2entry[row.key] = entry;
 
     let previousEntry: DeviceLogEntry | null = null;
 
@@ -291,7 +221,6 @@ export function addEntriesToState(
   return {
     entries,
     rows,
-    key2entry,
   };
 }
 
@@ -438,11 +367,11 @@ export default class LogTable extends FlipperDevicePlugin<
   };
 
   calculateHighlightedRows = (
-    deepLinkPayload: string | null,
+    deepLinkPayload: unknown,
     rows: ReadonlyArray<TableBodyRow>,
   ): Set<string> => {
     const highlightedRows = new Set<string>();
-    if (!deepLinkPayload) {
+    if (typeof deepLinkPayload !== 'string') {
       return highlightedRows;
     }
 
@@ -472,9 +401,6 @@ export default class LogTable extends FlipperDevicePlugin<
   };
 
   tableRef: ManagedTableClass | undefined;
-  columns: TableColumns;
-  columnSizes: TableColumnSizes;
-  columnOrder: TableColumnOrder;
   logListener: Symbol | undefined;
 
   batch: Array<{
@@ -486,12 +412,6 @@ export default class LogTable extends FlipperDevicePlugin<
 
   constructor(props: PluginProps<PersistedState>) {
     super(props);
-    const supportedColumns = this.device.supportedColumns();
-    this.columns = keepKeys(COLUMNS, supportedColumns);
-    this.columnSizes = keepKeys(COLUMN_SIZE, supportedColumns);
-    this.columnOrder = INITIAL_COLUMN_ORDER.filter((obj) =>
-      supportedColumns.includes(obj.key),
-    );
 
     const initialState = addEntriesToState(
       this.device
@@ -580,7 +500,6 @@ export default class LogTable extends FlipperDevicePlugin<
       entries: [],
       rows: [],
       highlightedRows: new Set(),
-      key2entry: {},
       counters: this.state.counters.map((counter) => ({
         ...counter,
         count: 0,
@@ -664,9 +583,9 @@ export default class LogTable extends FlipperDevicePlugin<
           innerRef={this.setTableRef}
           floating={false}
           multiline={true}
-          columnSizes={this.columnSizes}
-          columnOrder={this.columnOrder}
-          columns={this.columns}
+          columnSizes={COLUMN_SIZE}
+          columnOrder={INITIAL_COLUMN_ORDER}
+          columns={COLUMNS}
           rows={this.state.rows}
           highlightedRows={this.state.highlightedRows}
           onRowHighlighted={this.onRowHighlighted}

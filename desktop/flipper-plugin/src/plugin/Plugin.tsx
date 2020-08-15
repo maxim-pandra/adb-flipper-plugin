@@ -8,8 +8,8 @@
  */
 
 import {SandyPluginDefinition} from './SandyPluginDefinition';
-import {EventEmitter} from 'events';
-import {Atom} from '../state/atom';
+import {BasePluginInstance, BasePluginClient} from './PluginBase';
+import {FlipperLib} from './FlipperLib';
 
 type EventsContract = Record<string, any>;
 type MethodsContract = Record<string, (params: any) => Promise<any>>;
@@ -22,15 +22,10 @@ type Message = {
 /**
  * API available to a plugin factory
  */
-export interface FlipperClient<
+export interface PluginClient<
   Events extends EventsContract = {},
   Methods extends MethodsContract = {}
-> {
-  /**
-   * the onDestroy event is fired whenever a client is unloaded from Flipper, or a plugin is disabled.
-   */
-  onDestroy(cb: () => void): void;
-
+> extends BasePluginClient {
   /**
    * the onConnect event is fired whenever the plugin is connected to it's counter part on the device.
    * For most plugins this event is fired if the user selects the plugin,
@@ -82,16 +77,14 @@ export interface RealFlipperClient {
   ): Promise<Object>;
 }
 
-export type FlipperPluginFactory<
+export type PluginFactory<
   Events extends EventsContract,
   Methods extends MethodsContract
-> = (client: FlipperClient<Events, Methods>) => object;
+> = (client: PluginClient<Events, Methods>) => object;
 
 export type FlipperPluginComponent = React.FC<{}>;
 
-export let currentPluginInstance: SandyPluginInstance | undefined = undefined;
-
-export class SandyPluginInstance {
+export class SandyPluginInstance extends BasePluginInstance {
   static is(thing: any): thing is SandyPluginInstance {
     return thing instanceof SandyPluginInstance;
   }
@@ -99,32 +92,21 @@ export class SandyPluginInstance {
   /** base client provided by Flipper */
   realClient: RealFlipperClient;
   /** client that is bound to this instance */
-  client: FlipperClient<any, any>;
-  /** the original plugin definition */
-  definition: SandyPluginDefinition;
-  /** the plugin instance api as used inside components and such  */
-  instanceApi: any;
-
+  client: PluginClient<any, any>;
+  /** connection alive? */
   connected = false;
-  destroyed = false;
-  events = new EventEmitter();
-
-  // temporarily field that is used during deserialization
-  initialStates?: Record<string, any>;
-  // all the atoms that should be serialized when making an export / import
-  rootStates: Record<string, Atom<any>> = {};
 
   constructor(
-    realClient: RealFlipperClient,
+    flipperLib: FlipperLib,
     definition: SandyPluginDefinition,
+    realClient: RealFlipperClient,
     initialStates?: Record<string, any>,
   ) {
+    super(flipperLib, definition, initialStates);
     this.realClient = realClient;
     this.definition = definition;
     this.client = {
-      onDestroy: (cb) => {
-        this.events.on('destroy', cb);
-      },
+      ...this.createBasePluginClient(),
       onConnect: (cb) => {
         this.events.on('connect', cb);
       },
@@ -144,34 +126,25 @@ export class SandyPluginInstance {
         this.events.on('event-' + event, callback);
       },
     };
-    currentPluginInstance = this;
-    this.initialStates = initialStates;
-    try {
-      this.instanceApi = definition.module.plugin(this.client);
-    } finally {
-      this.initialStates = undefined;
-      currentPluginInstance = undefined;
-    }
+    this.initializePlugin(() =>
+      definition.asPluginModule().plugin(this.client),
+    );
   }
 
   // the plugin is selected in the UI
   activate() {
-    this.assertNotDestroyed();
+    super.activate();
     const pluginId = this.definition.id;
-    if (!this.realClient.isBackgroundPlugin(pluginId)) {
+    if (!this.connected && !this.realClient.isBackgroundPlugin(pluginId)) {
       this.realClient.initPlugin(pluginId); // will call connect() if needed
     }
   }
 
   // the plugin is deselected in the UI
   deactivate() {
-    if (this.destroyed) {
-      // this can happen if the plugin is disabled while active in the UI.
-      // In that case deinit & destroy is already triggered from the STAR_PLUGIN action
-      return;
-    }
+    super.deactivate();
     const pluginId = this.definition.id;
-    if (!this.realClient.isBackgroundPlugin(pluginId)) {
+    if (this.connected && !this.realClient.isBackgroundPlugin(pluginId)) {
       this.realClient.deinitPlugin(pluginId);
     }
   }
@@ -193,12 +166,10 @@ export class SandyPluginInstance {
   }
 
   destroy() {
-    this.assertNotDestroyed();
     if (this.connected) {
       this.realClient.deinitPlugin(this.definition.id);
     }
-    this.events.emit('destroy');
-    this.destroyed = true;
+    super.destroy();
   }
 
   receiveMessages(messages: Message[]) {
@@ -209,22 +180,6 @@ export class SandyPluginInstance {
 
   toJSON() {
     return '[SandyPluginInstance]';
-  }
-
-  exportState() {
-    return Object.fromEntries(
-      Object.entries(this.rootStates).map(([key, atom]) => [key, atom.get()]),
-    );
-  }
-
-  isPersistable(): boolean {
-    return Object.keys(this.rootStates).length > 0;
-  }
-
-  private assertNotDestroyed() {
-    if (this.destroyed) {
-      throw new Error('Plugin has been destroyed already');
-    }
   }
 
   private assertConnected() {

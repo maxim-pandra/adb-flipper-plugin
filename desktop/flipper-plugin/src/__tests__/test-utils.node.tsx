@@ -10,6 +10,8 @@
 import * as TestUtils from '../test-utils/test-utils';
 import * as testPlugin from './TestPlugin';
 import {createState} from '../state/atom';
+import {PluginClient} from '../plugin/Plugin';
+import {DevicePluginClient} from '../plugin/DevicePlugin';
 
 test('it can start a plugin and lifecycle events', () => {
   const {instance, ...p} = TestUtils.startPlugin(testPlugin);
@@ -22,11 +24,15 @@ test('it can start a plugin and lifecycle events', () => {
   // startPlugin starts connected
   expect(instance.connectStub).toBeCalledTimes(1);
   expect(instance.disconnectStub).toBeCalledTimes(0);
+  expect(instance.activateStub).toBeCalledTimes(1);
+  expect(instance.deactivateStub).toBeCalledTimes(0);
   expect(instance.destroyStub).toBeCalledTimes(0);
 
   p.connect(); // noop
   expect(instance.connectStub).toBeCalledTimes(1);
   expect(instance.disconnectStub).toBeCalledTimes(0);
+  expect(instance.activateStub).toBeCalledTimes(1);
+  expect(instance.deactivateStub).toBeCalledTimes(0);
   expect(instance.destroyStub).toBeCalledTimes(0);
 
   p.disconnect();
@@ -36,15 +42,59 @@ test('it can start a plugin and lifecycle events', () => {
   expect(instance.disconnectStub).toBeCalledTimes(1);
   expect(instance.destroyStub).toBeCalledTimes(0);
 
-  p.destroy();
-  expect(instance.connectStub).toBeCalledTimes(2);
+  p.deactivate(); // also disconnects
+  p.activate();
+  expect(instance.connectStub).toBeCalledTimes(3);
   expect(instance.disconnectStub).toBeCalledTimes(2);
+  expect(instance.activateStub).toBeCalledTimes(2);
+  expect(instance.deactivateStub).toBeCalledTimes(1);
+
+  p.destroy();
+  expect(instance.connectStub).toBeCalledTimes(3);
+  expect(instance.disconnectStub).toBeCalledTimes(3);
+  expect(instance.activateStub).toBeCalledTimes(2);
+  expect(instance.deactivateStub).toBeCalledTimes(2);
   expect(instance.destroyStub).toBeCalledTimes(1);
 
   // cannot interact with destroyed plugin
   expect(() => {
     p.connect();
   }).toThrowErrorMatchingInlineSnapshot(`"Plugin has been destroyed already"`);
+  expect(() => {
+    p.activate();
+  }).toThrowErrorMatchingInlineSnapshot(`"Plugin has been destroyed already"`);
+});
+
+test('it can start a plugin and lifecycle events for background plugins', () => {
+  const {instance, ...p} = TestUtils.startPlugin(testPlugin, {
+    isBackgroundPlugin: true,
+  });
+
+  // @ts-expect-error
+  p.bla;
+  // @ts-expect-error
+  instance.bla;
+
+  // startPlugin starts connected
+  expect(instance.connectStub).toBeCalledTimes(1);
+  expect(instance.disconnectStub).toBeCalledTimes(0);
+  expect(instance.activateStub).toBeCalledTimes(1);
+  expect(instance.deactivateStub).toBeCalledTimes(0);
+  expect(instance.destroyStub).toBeCalledTimes(0);
+
+  p.deactivate(); // bg, no disconnection
+  p.activate();
+  expect(instance.connectStub).toBeCalledTimes(1);
+  expect(instance.disconnectStub).toBeCalledTimes(0);
+  expect(instance.activateStub).toBeCalledTimes(2);
+  expect(instance.deactivateStub).toBeCalledTimes(1);
+
+  p.destroy();
+  expect(instance.connectStub).toBeCalledTimes(1);
+  expect(instance.disconnectStub).toBeCalledTimes(1);
+  expect(instance.activateStub).toBeCalledTimes(2);
+  expect(instance.deactivateStub).toBeCalledTimes(2);
+  expect(instance.destroyStub).toBeCalledTimes(1);
 });
 
 test('it can render a plugin', () => {
@@ -192,4 +242,107 @@ test('plugins cannot use a persist key twice', async () => {
   }).toThrowErrorMatchingInlineSnapshot(
     `"Some other state is already persisting with key \\"test\\""`,
   );
+});
+
+test('plugins can receive deeplinks', async () => {
+  const plugin = TestUtils.startPlugin({
+    plugin(client: PluginClient) {
+      client.onDeepLink((deepLink) => {
+        if (typeof deepLink === 'string') {
+          field1.set(deepLink);
+        }
+      });
+      const field1 = createState('', {persist: 'test'});
+      return {field1};
+    },
+    Component() {
+      return null;
+    },
+  });
+
+  expect(plugin.instance.field1.get()).toBe('');
+  plugin.triggerDeepLink('test');
+  expect(plugin.instance.field1.get()).toBe('test');
+});
+
+test('device plugins can receive deeplinks', async () => {
+  const plugin = TestUtils.startDevicePlugin({
+    devicePlugin(client: DevicePluginClient) {
+      client.onDeepLink((deepLink) => {
+        if (typeof deepLink === 'string') {
+          field1.set(deepLink);
+        }
+      });
+      const field1 = createState('', {persist: 'test'});
+      return {field1};
+    },
+    supportsDevice: () => true,
+    Component() {
+      return null;
+    },
+  });
+
+  expect(plugin.instance.field1.get()).toBe('');
+  plugin.triggerDeepLink('test');
+  expect(plugin.instance.field1.get()).toBe('test');
+});
+
+test('plugins can register menu entries', async () => {
+  const plugin = TestUtils.startPlugin({
+    plugin(client: PluginClient) {
+      const counter = createState(0);
+      client.addMenuEntry(
+        {
+          action: 'createPaste',
+          handler() {
+            counter.set(counter.get() + 1);
+          },
+        },
+        {
+          label: 'Custom Action',
+          topLevelMenu: 'Edit',
+          handler() {
+            counter.set(counter.get() + 3);
+          },
+        },
+      );
+      return {counter};
+    },
+    Component() {
+      return null;
+    },
+  });
+
+  expect(plugin.instance.counter.get()).toBe(0);
+  plugin.triggerDeepLink('test');
+  plugin.triggerMenuEntry('createPaste');
+  plugin.triggerMenuEntry('Custom Action');
+  expect(plugin.instance.counter.get()).toBe(4);
+  expect(plugin.flipperLib.enableMenuEntries).toBeCalledTimes(1);
+
+  plugin.deactivate();
+
+  expect(() => {
+    plugin.triggerMenuEntry('Non Existing');
+  }).toThrowErrorMatchingInlineSnapshot(
+    `"No menu entry found with action: Non Existing"`,
+  );
+});
+
+test('plugins can create pastes', async () => {
+  const plugin = TestUtils.startPlugin({
+    plugin(client: PluginClient) {
+      return {
+        doIt() {
+          client.createPaste('test');
+        },
+      };
+    },
+    Component() {
+      return null;
+    },
+  });
+
+  plugin.instance.doIt();
+  expect(plugin.flipperLib.createPaste).toBeCalledWith('test');
 });

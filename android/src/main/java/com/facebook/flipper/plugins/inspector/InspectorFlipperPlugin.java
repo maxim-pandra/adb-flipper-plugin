@@ -37,6 +37,30 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
   private @Nullable List<ExtensionCommand> mExtensionCommands;
   private boolean mShowLithoAccessibilitySettings;
 
+  public enum IDE {
+    DIFFUSION("Diffusion"),
+    AS("Android Studio"),
+    VSCODE("Visual Studio Code");
+
+    private String ideName;
+
+    IDE(String ideName) {
+      this.ideName = ideName;
+    }
+
+    public String getFullIdeName() {
+      return ideName;
+    }
+
+    public static IDE fromString(final String ide) {
+      try {
+        return IDE.valueOf(ide);
+      } catch (IllegalArgumentException e) {
+        return IDE.AS; // default value
+      }
+    }
+  }
+
   /** An interface for extensions to the Inspector Flipper plugin */
   public interface ExtensionCommand {
     /** The command to respond to */
@@ -418,6 +442,26 @@ public class InspectorFlipperPlugin implements FlipperPlugin {
           responder.success(response);
         }
       };
+
+  public boolean isConnectionEstablished() {
+    return mConnection != null;
+  }
+
+  public void openInIDE(
+      String fileName, String className, String dirRoot, String repo, int lineNumber, IDE ide) {
+    if (mConnection == null) return;
+
+    mConnection.send(
+        "openInIDE",
+        new FlipperObject.Builder()
+            .put("fileName", fileName)
+            .put("className", className)
+            .put("dirRoot", dirRoot)
+            .put("repo", repo)
+            .put("lineNumber", lineNumber)
+            .put("ide", ide)
+            .build());
+  }
 
   private void setHighlighted(
       final String id, final boolean highlighted, final boolean isAlignmentMode) throws Exception {

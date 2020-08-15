@@ -19,7 +19,6 @@ import {PluginNotification} from '../reducers/notifications';
 import Client, {ClientExport, ClientQuery} from '../Client';
 import {pluginKey} from '../reducers/pluginStates';
 import {
-  FlipperDevicePlugin,
   callClient,
   supportsMethod,
   PluginDefinition,
@@ -82,7 +81,7 @@ type ProcessPluginStatesOptions = {
   clients: Array<ClientExport>;
   serial: string;
   allPluginStates: PluginStatesState;
-  devicePlugins: Map<string, typeof FlipperDevicePlugin>;
+  devicePlugins: DevicePluginMap;
   selectedPlugins: Array<string>;
   statusUpdate?: (msg: string) => void;
 };
@@ -91,7 +90,7 @@ type ProcessNotificationStatesOptions = {
   clients: Array<ClientExport>;
   serial: string;
   allActiveNotifications: Array<PluginNotification>;
-  devicePlugins: Map<string, typeof FlipperDevicePlugin>;
+  devicePlugins: DevicePluginMap;
   statusUpdate?: (msg: string) => void;
 };
 
@@ -663,7 +662,7 @@ async function getStoreExport(
   const newPluginState = metadata.pluginStates;
 
   // TODO: support async export like fetchMetaData T68683476
-  // TODO: support device plugins T68738317
+  // TODO: support device plugins T70582933
   const pluginStates2 = pluginsToProcess
     ? exportSandyPluginStates(pluginsToProcess)
     : {};

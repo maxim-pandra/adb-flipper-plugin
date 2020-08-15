@@ -11,7 +11,7 @@ import {ChildProcess} from 'child_process';
 import {Store} from '../reducers/index';
 import {setXcodeDetected} from '../reducers/application';
 import {Logger} from '../fb-interfaces/Logger';
-import {DeviceType} from '../devices/BaseDevice';
+import type {DeviceType} from 'flipper-plugin';
 import {promisify} from 'util';
 import path from 'path';
 import child_process from 'child_process';
@@ -81,9 +81,11 @@ async function queryDevices(store: Store, logger: Logger): Promise<any> {
     getActiveSimulators().then((devices) => {
       processDevices(store, logger, devices, 'emulator');
     }),
-    getActiveDevices().then((devices) => {
-      processDevices(store, logger, devices, 'physical');
-    }),
+    getActiveDevices(store.getState().settingsState.idbPath).then(
+      (devices: IOSDeviceParams[]) => {
+        processDevices(store, logger, devices, 'physical');
+      },
+    ),
   ]);
 }
 
@@ -173,8 +175,8 @@ function getActiveSimulators(): Promise<Array<IOSDeviceParams>> {
     .catch((_) => []);
 }
 
-function getActiveDevices(): Promise<Array<IOSDeviceParams>> {
-  return iosUtil.targets().catch((e) => {
+function getActiveDevices(idbPath: string): Promise<Array<IOSDeviceParams>> {
+  return iosUtil.targets(idbPath).catch((e) => {
     console.error(e.message);
     return [];
   });
@@ -233,12 +235,12 @@ async function isXcodeDetected(): Promise<boolean> {
     .catch((_) => false);
 }
 
-export async function getActiveDevicesAndSimulators(): Promise<
-  Array<IOSDevice>
-> {
+export async function getActiveDevicesAndSimulators(
+  store: Store,
+): Promise<Array<IOSDevice>> {
   const activeDevices: Array<Array<IOSDeviceParams>> = await Promise.all([
     getActiveSimulators(),
-    getActiveDevices(),
+    getActiveDevices(store.getState().settingsState.idbPath),
   ]);
   const allDevices = activeDevices[0].concat(activeDevices[1]);
   return allDevices.map((device) => {

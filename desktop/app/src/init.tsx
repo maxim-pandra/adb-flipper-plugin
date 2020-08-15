@@ -10,6 +10,7 @@
 import {Provider} from 'react-redux';
 import ReactDOM from 'react-dom';
 import {useState, useEffect} from 'react';
+
 import ContextMenuProvider from './ui/components/ContextMenuProvider';
 import GK from './fb-stubs/GK';
 import {init as initLogger} from './fb-stubs/Logger';
@@ -34,6 +35,9 @@ import {cache} from 'emotion';
 import {CacheProvider} from '@emotion/core';
 import {enableMapSet} from 'immer';
 import os from 'os';
+import QuickPerformanceLogger, {FLIPPER_QPL_EVENTS} from './fb-stubs/QPL';
+import {PopoverProvider} from './ui/components/PopoverProvider';
+import {initializeFlipperLibImplementation} from './utils/flipperLibImplementation';
 
 if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   // By default Node.JS has its internal certificate storage and doesn't use
@@ -44,7 +48,12 @@ if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   global.electronRequire('mac-ca');
 }
 
+const [s, ns] = process.hrtime();
+const launchTime = s * 1e3 + ns / 1e6;
+
 const logger = initLogger(store);
+
+QuickPerformanceLogger.markerStart(FLIPPER_QPL_EVENTS.STARTUP, 0, launchTime);
 
 enableMapSet();
 
@@ -62,21 +71,23 @@ const AppFrame = () => {
 
   return (
     <TooltipProvider>
-      <ContextMenuProvider>
-        <Provider store={store}>
-          <CacheProvider value={cache}>
-            {warnEmployee ? (
-              <WarningEmployee
-                onClick={() => {
-                  setWarnEmployee(false);
-                }}
-              />
-            ) : (
-              <App logger={logger} />
-            )}
-          </CacheProvider>
-        </Provider>
-      </ContextMenuProvider>
+      <PopoverProvider>
+        <ContextMenuProvider>
+          <Provider store={store}>
+            <CacheProvider value={cache}>
+              {warnEmployee ? (
+                <WarningEmployee
+                  onClick={() => {
+                    setWarnEmployee(false);
+                  }}
+                />
+              ) : (
+                <App logger={logger} />
+              )}
+            </CacheProvider>
+          </Provider>
+        </ContextMenuProvider>
+      </PopoverProvider>
     </TooltipProvider>
   );
 };
@@ -102,6 +113,7 @@ function setProcessState(store: Store) {
 }
 
 function init() {
+  initializeFlipperLibImplementation(store, logger);
   ReactDOM.render(<AppFrame />, document.getElementById('root'));
   initLauncherHooks(config(), store);
   const sessionId = store.getState().application.sessionId;

@@ -25,6 +25,8 @@ import os from 'os';
 import {Client as ADBClient} from 'adbkit';
 import {Store} from '../reducers/index';
 
+export type CertificateExchangeMedium = 'FS_ACCESS' | 'WWW';
+
 const tmpFile = promisify(tmp.file) as (
   options?: FileOptions,
 ) => Promise<string>;
@@ -96,7 +98,14 @@ export default class CertificateProvider {
     unsanitizedCsr: string,
     os: string,
     appDirectory: string,
+    medium: CertificateExchangeMedium,
   ): Promise<{deviceId: string}> {
+    // TODO: Add implementations for each of these conditions
+    if (medium === 'FS_ACCESS') {
+      // Use IDB for cert exchange
+    } else if (medium === 'WWW') {
+      // Use WWWW
+    }
     const csr = this.santitizeString(unsanitizedCsr);
     if (csr === '') {
       return Promise.reject(new Error(`Received empty CSR from ${os} device`));
@@ -333,28 +342,30 @@ export default class CertificateProvider {
       // It's a simulator, the deviceId is in the filepath.
       return Promise.resolve(matches[1]);
     }
-    return iosUtil.targets().then((targets) => {
-      if (targets.length === 0) {
-        throw new Error('No iOS devices found');
-      }
-      const deviceMatchList = targets.map((target) =>
-        this.iOSDeviceHasMatchingCSR(
-          deviceCsrFilePath,
-          target.udid,
-          appName,
-          csr,
-        ).then((isMatch) => {
-          return {id: target.udid, isMatch};
-        }),
-      );
-      return Promise.all(deviceMatchList).then((devices) => {
-        const matchingIds = devices.filter((m) => m.isMatch).map((m) => m.id);
-        if (matchingIds.length == 0) {
-          throw new Error(`No matching device found for app: ${appName}`);
+    return iosUtil
+      .targets(this.store.getState().settingsState.idbPath)
+      .then((targets) => {
+        if (targets.length === 0) {
+          throw new Error('No iOS devices found');
         }
-        return matchingIds[0];
+        const deviceMatchList = targets.map((target) =>
+          this.iOSDeviceHasMatchingCSR(
+            deviceCsrFilePath,
+            target.udid,
+            appName,
+            csr,
+          ).then((isMatch) => {
+            return {id: target.udid, isMatch};
+          }),
+        );
+        return Promise.all(deviceMatchList).then((devices) => {
+          const matchingIds = devices.filter((m) => m.isMatch).map((m) => m.id);
+          if (matchingIds.length == 0) {
+            throw new Error(`No matching device found for app: ${appName}`);
+          }
+          return matchingIds[0];
+        });
       });
-    });
   }
 
   androidDeviceHasMatchingCSR(
