@@ -21,5 +21,9 @@
   "devDependencies": {
     "flipper": "latest",
     "flipper-pkg": "latest"
+  },
+  "bugs": {
+    "email": "turaevmaxim@gmail.com",
+    "url": "https://github.com/maxim-pandra/adb-flipper-plugin"
   }
 }
