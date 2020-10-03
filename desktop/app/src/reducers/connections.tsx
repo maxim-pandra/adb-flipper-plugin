@@ -27,21 +27,15 @@ import {getPluginKey, isDevicePluginDefinition} from '../utils/pluginUtils';
 import {deconstructClientId} from '../utils/clientUtils';
 import {PluginDefinition} from '../plugin';
 import {RegisterPluginAction} from './plugins';
+import {ConsoleLogs} from '../chrome/ConsoleLogs';
 
 export type StaticView =
   | null
   | typeof WelcomeScreen
   | typeof NotificationScreen
   | typeof SupportRequestFormV2
-  | typeof SupportRequestDetails;
-
-export type FlipperError = {
-  occurrences?: number;
-  message: string;
-  details?: string;
-  error?: Error | string;
-  urgent?: boolean; // if true this error should always popup up
-};
+  | typeof SupportRequestDetails
+  | typeof ConsoleLogs;
 
 export type State = {
   devices: Array<BaseDevice>;
@@ -53,7 +47,6 @@ export type State = {
   userPreferredPlugin: null | string;
   userPreferredApp: null | string;
   userStarredPlugins: {[client: string]: string[]};
-  errors: FlipperError[];
   clients: Array<Client>;
   uninitializedClients: Array<{
     client: UninitializedClient;
@@ -96,10 +89,6 @@ export type Action =
       payload: string;
     }
   | {
-      type: 'SERVER_ERROR';
-      payload: null | FlipperError;
-    }
-  | {
       type: 'NEW_CLIENT';
       payload: Client;
     }
@@ -120,16 +109,9 @@ export type Action =
       payload: {client: UninitializedClient; deviceId: string};
     }
   | {
-      type: 'CLIENT_SETUP_ERROR';
-      payload: {client: UninitializedClient; error: FlipperError};
-    }
-  | {
       type: 'SET_STATIC_VIEW';
       payload: StaticView;
-    }
-  | {
-      type: 'DISMISS_ERROR';
-      payload: number;
+      deepLinkPayload: unknown;
     }
   | {
       // Implemented by rootReducer in `store.tsx`
@@ -143,11 +125,12 @@ export type Action =
       type: 'SELECT_CLIENT';
       payload: string;
     }
+  | RegisterPluginAction
   | {
-      type: 'SET_DEEPLINK_PAYLOAD';
-      payload: null | string;
-    }
-  | RegisterPluginAction;
+      // Implemented by rootReducer in `store.tsx`
+      type: 'UPDATE_PLUGIN';
+      payload: PluginDefinition;
+    };
 
 const DEFAULT_PLUGIN = 'DeviceLogs';
 const DEFAULT_DEVICE_BLACKLIST = [MacDevice];
@@ -161,7 +144,6 @@ const INITAL_STATE: State = {
   userPreferredPlugin: null,
   userPreferredApp: null,
   userStarredPlugins: {},
-  errors: [],
   clients: [],
   uninitializedClients: [],
   deepLinkPayload: null,
@@ -171,12 +153,13 @@ const INITAL_STATE: State = {
 export default (state: State = INITAL_STATE, action: Actions): State => {
   switch (action.type) {
     case 'SET_STATIC_VIEW': {
-      const {payload} = action;
+      const {payload, deepLinkPayload} = action;
       const {selectedPlugin} = state;
       return {
         ...state,
         staticView: payload,
         selectedPlugin: payload != null ? null : selectedPlugin,
+        deepLinkPayload: deepLinkPayload ?? null,
       };
     }
 
@@ -250,16 +233,28 @@ export default (state: State = INITAL_STATE, action: Actions): State => {
       if (typeof deepLinkPayload === 'string') {
         const deepLinkParams = new URLSearchParams(deepLinkPayload);
         const deviceParam = deepLinkParams.get('device');
-        const deviceMatch = state.devices.find((v) => v.title === deviceParam);
-        if (deviceMatch) {
-          selectedDevice = deviceMatch;
-        } else {
-          console.warn(
-            `Could not find matching device "${deviceParam}" requested through deep-link.`,
+        if (deviceParam) {
+          const deviceMatch = state.devices.find(
+            (v) => v.title === deviceParam,
           );
+          if (deviceMatch) {
+            selectedDevice = deviceMatch;
+          } else {
+            console.warn(
+              `Could not find matching device "${deviceParam}" requested through deep-link.`,
+            );
+          }
         }
       }
-      if (!selectDevice) {
+      if (!selectedDevice && selectedPlugin) {
+        const selectedClient = state.clients.find((c) =>
+          c.supportsPlugin(selectedPlugin),
+        );
+        selectedDevice = state.devices.find(
+          (v) => v.serial === selectedClient?.query.device_id,
+        );
+      }
+      if (!selectedDevice) {
         console.warn('Trying to select a plugin before a device was selected!');
       }
       if (selectedPlugin) {
@@ -323,13 +318,6 @@ export default (state: State = INITAL_STATE, action: Actions): State => {
       const {payload: userPreferredDevice} = action;
       return {...state, userPreferredDevice};
     }
-    case 'SERVER_ERROR': {
-      const {payload} = action;
-      if (!payload) {
-        return state;
-      }
-      return {...state, errors: mergeError(state.errors, payload)};
-    }
     case 'START_CLIENT_SETUP': {
       const {payload} = action;
       return {
@@ -353,42 +341,6 @@ export default (state: State = INITAL_STATE, action: Actions): State => {
           .sort((a, b) => a.client.appName.localeCompare(b.client.appName)),
       };
     }
-    case 'CLIENT_SETUP_ERROR': {
-      const {payload} = action;
-
-      const errorMessage =
-        payload.error instanceof Error
-          ? payload.error.message
-          : '' + payload.error;
-      const details = `Client setup error: ${errorMessage} while setting up client: ${payload.client.os}:${payload.client.deviceName}:${payload.client.appName}`;
-      console.error(details);
-      return {
-        ...state,
-        uninitializedClients: state.uninitializedClients
-          .map((c) =>
-            isEqual(c.client, payload.client)
-              ? {...c, errorMessage: errorMessage}
-              : c,
-          )
-          .sort((a, b) => a.client.appName.localeCompare(b.client.appName)),
-        errors: mergeError(state.errors, {
-          message: `Client setup error: ${errorMessage}`,
-          details,
-          error: payload.error instanceof Error ? payload.error : undefined,
-        }),
-      };
-    }
-    case 'DISMISS_ERROR': {
-      const errors = state.errors.slice();
-      errors.splice(action.payload, 1);
-      return {
-        ...state,
-        errors,
-      };
-    }
-    case 'SET_DEEPLINK_PAYLOAD': {
-      return {...state, deepLinkPayload: action.payload};
-    }
     case 'REGISTER_PLUGINS': {
       // plugins are registered after creating the base devices, so update them
       const plugins = action.payload;
@@ -402,44 +354,27 @@ export default (state: State = INITAL_STATE, action: Actions): State => {
       });
       return state;
     }
-
     default:
       return state;
   }
 };
-
-function mergeError(
-  errors: FlipperError[],
-  newError: FlipperError,
-): FlipperError[] {
-  const idx = errors.findIndex((error) => error.message === newError.message);
-  const results = errors.slice();
-  if (idx !== -1) {
-    results[idx] = {
-      ...newError,
-      occurrences: (errors[idx].occurrences || 0) + 1,
-    };
-  } else {
-    results.push({
-      ...newError,
-      occurrences: 1,
-    });
-  }
-  return results;
-}
 
 export const selectDevice = (payload: BaseDevice): Action => ({
   type: 'SELECT_DEVICE',
   payload,
 });
 
-export const setStaticView = (payload: StaticView): Action => {
+export const setStaticView = (
+  payload: StaticView,
+  deepLinkPayload?: unknown,
+): Action => {
   if (!payload) {
     throw new Error('Cannot set empty static view');
   }
   return {
     type: 'SET_STATIC_VIEW',
     payload,
+    deepLinkPayload,
   };
 };
 
@@ -467,18 +402,13 @@ export const starPlugin = (payload: {
   payload,
 });
 
-export const dismissError = (index: number): Action => ({
-  type: 'DISMISS_ERROR',
-  payload: index,
-});
-
 export const selectClient = (clientId: string): Action => ({
   type: 'SELECT_CLIENT',
   payload: clientId,
 });
 
-export const setDeeplinkPayload = (payload: string | null): Action => ({
-  type: 'SET_DEEPLINK_PAYLOAD',
+export const registerPluginUpdate = (payload: PluginDefinition): Action => ({
+  type: 'UPDATE_PLUGIN',
   payload,
 });
 

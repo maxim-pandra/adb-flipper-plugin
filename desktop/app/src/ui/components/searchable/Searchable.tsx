@@ -108,9 +108,9 @@ export type SearchableProps = {
   searchTerm: string;
   filters: Array<Filter>;
   allowRegexSearch?: boolean;
-  allowBodySearch?: boolean;
+  allowContentSearch?: boolean;
   regexEnabled?: boolean;
-  bodySearchEnabled?: boolean;
+  contentSearchEnabled?: boolean;
 };
 
 type Props = {
@@ -123,7 +123,7 @@ type Props = {
   clearSearchTerm: boolean;
   defaultSearchTerm: string;
   allowRegexSearch: boolean;
-  allowBodySearch: boolean;
+  allowContentSearch: boolean;
 };
 
 type State = {
@@ -132,7 +132,7 @@ type State = {
   searchTerm: string;
   hasFocus: boolean;
   regexEnabled: boolean;
-  bodySearchEnabled: boolean;
+  contentSearchEnabled: boolean;
   compiledRegex: RegExp | null | undefined;
 };
 
@@ -144,10 +144,14 @@ function compileRegex(s: string): RegExp | null {
   }
 }
 
-const Searchable = (
+/**
+ * Higher-order-component that allows adding a searchbar on top of the wrapped
+ * component. See SearchableManagedTable for usage with a table.
+ */
+export default function Searchable(
   Component: React.ComponentType<any>,
-): React.ComponentType<any> =>
-  class extends PureComponent<Props, State> {
+): React.ComponentType<any> {
+  return class extends PureComponent<Props, State> {
     static displayName = `Searchable(${Component.displayName})`;
 
     static defaultProps = {
@@ -161,7 +165,7 @@ const Searchable = (
       searchTerm: this.props.defaultSearchTerm ?? '',
       hasFocus: false,
       regexEnabled: false,
-      bodySearchEnabled: false,
+      contentSearchEnabled: false,
       compiledRegex: null,
     };
 
@@ -174,7 +178,7 @@ const Searchable = (
         | {
             filters: Array<Filter>;
             regexEnabled?: boolean;
-            bodySearchEnabled?: boolean;
+            contentSearchEnabled?: boolean;
             searchTerm?: string;
           }
         | undefined;
@@ -220,8 +224,8 @@ const Searchable = (
           searchTerm: searchTerm,
           filters: savedState.filters || this.state.filters,
           regexEnabled: savedState.regexEnabled || this.state.regexEnabled,
-          bodySearchEnabled:
-            savedState.bodySearchEnabled || this.state.bodySearchEnabled,
+          contentSearchEnabled:
+            savedState.contentSearchEnabled || this.state.contentSearchEnabled,
           compiledRegex: compileRegex(searchTerm),
         });
       }
@@ -232,7 +236,7 @@ const Searchable = (
         this.getTableKey() &&
         (prevState.searchTerm !== this.state.searchTerm ||
           prevState.regexEnabled != this.state.regexEnabled ||
-          prevState.bodySearchEnabled != this.state.bodySearchEnabled ||
+          prevState.contentSearchEnabled != this.state.contentSearchEnabled ||
           prevState.filters !== this.state.filters)
       ) {
         window.localStorage.setItem(
@@ -241,7 +245,7 @@ const Searchable = (
             searchTerm: this.state.searchTerm,
             filters: this.state.filters,
             regexEnabled: this.state.regexEnabled,
-            bodySearchEnabled: this.state.bodySearchEnabled,
+            contentSearchEnabled: this.state.contentSearchEnabled,
           }),
         );
         if (this.props.onFilterChange != null) {
@@ -449,9 +453,9 @@ const Searchable = (
       });
     };
 
-    onBodySearchToggled = () => {
+    onContentSearchToggled = () => {
       this.setState({
-        bodySearchEnabled: !this.state.bodySearchEnabled,
+        contentSearchEnabled: !this.state.contentSearchEnabled,
       });
     };
 
@@ -519,13 +523,13 @@ const Searchable = (
                 label={'Regex'}
               />
             ) : null}
-            {this.props.allowBodySearch ? (
+            {this.props.allowContentSearch ? (
               <ToggleButton
-                toggled={this.state.bodySearchEnabled}
-                onClick={this.onBodySearchToggled}
-                label={'Body'}
+                toggled={this.state.contentSearchEnabled}
+                onClick={this.onContentSearchToggled}
+                label={'Contents'}
                 tooltip={
-                  'Search request and response bodies (warning: this can be quite slow)'
+                  'Search the full item contents (warning: this can be quite slow)'
                 }
               />
             ) : null}
@@ -537,16 +541,11 @@ const Searchable = (
             addFilter={this.addFilter}
             searchTerm={this.state.searchTerm}
             regexEnabled={this.state.regexEnabled}
-            bodySearchEnabled={this.state.bodySearchEnabled}
+            contentSearchEnabled={this.state.contentSearchEnabled}
             filters={this.state.filters}
           />
         </Layout.Top>
       );
     }
   };
-
-/**
- * Higher-order-component that allows adding a searchbar on top of the wrapped
- * component. See SearchableManagedTable for usage with a table.
- */
-export default Searchable;
+}

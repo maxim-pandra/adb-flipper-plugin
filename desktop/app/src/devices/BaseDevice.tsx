@@ -9,14 +9,13 @@
 
 import stream from 'stream';
 import type {DeviceLogListener} from 'flipper';
-import {sortPluginsByName} from '../utils/pluginUtils';
 import {
   DeviceLogEntry,
   SandyDevicePluginInstance,
   SandyPluginDefinition,
   DeviceType,
 } from 'flipper-plugin';
-import type {DevicePluginMap, FlipperDevicePlugin} from '../plugin';
+import type {DevicePluginDefinition, DevicePluginMap} from '../plugin';
 import {getFlipperLibImplementation} from '../utils/flipperLibImplementation';
 
 export type DeviceShell = {
@@ -120,6 +119,7 @@ export default class BaseDevice {
     this._notifyLogListeners(entry);
   }
 
+  // TODO: remove getLogs T70688226
   getLogs(startDate: Date | null = null) {
     return startDate != null
       ? this.logEntries.filter((log) => {
@@ -169,13 +169,12 @@ export default class BaseDevice {
       return;
     }
     const plugins = Array.from(devicePlugins.values());
-    plugins.sort(sortPluginsByName);
     for (const plugin of plugins) {
       this.loadDevicePlugin(plugin);
     }
   }
 
-  loadDevicePlugin(plugin: typeof FlipperDevicePlugin | SandyPluginDefinition) {
+  loadDevicePlugin(plugin: DevicePluginDefinition) {
     if (plugin instanceof SandyPluginDefinition) {
       if (plugin.asDevicePluginModule().supportsDevice(this as any)) {
         this.devicePlugins.push(plugin.id);
@@ -193,5 +192,14 @@ export default class BaseDevice {
         this.devicePlugins.push(plugin.id);
       }
     }
+  }
+
+  unloadDevicePlugin(pluginId: string) {
+    const instance = this.sandyPluginStates.get(pluginId);
+    if (instance) {
+      instance.destroy();
+      this.sandyPluginStates.delete(pluginId);
+    }
+    this.devicePlugins.splice(this.devicePlugins.indexOf(pluginId), 1);
   }
 }

@@ -48,6 +48,7 @@ import {Idler} from './utils/Idler';
 import {processMessageQueue} from './utils/messageQueue';
 import {ToggleButton, SmallText} from './ui';
 import {SandyPluginRenderer} from 'flipper-plugin';
+import {isDevicePluginDefinition} from './utils/pluginUtils';
 
 const Container = styled(FlexColumn)({
   width: 0,
@@ -193,24 +194,30 @@ class PluginContainer extends PureComponent<Props, State> {
       pendingMessages,
       activePlugin,
       pluginIsEnabled,
+      target,
     } = this.props;
     if (pluginKey !== this.pluginBeingProcessed) {
       this.pluginBeingProcessed = pluginKey;
       this.cancelCurrentQueue();
       this.setState({progress: {current: 0, total: 0}});
+      // device plugins don't have connections so no message queues
+      if (!activePlugin || isDevicePluginDefinition(activePlugin)) {
+        return;
+      }
       if (
         pluginIsEnabled &&
+        target instanceof Client &&
         activePlugin &&
-        // TODO: support sandy: T68683442
-        !isSandyPlugin(activePlugin) &&
-        activePlugin.persistedStateReducer &&
+        (isSandyPlugin(activePlugin) || activePlugin.persistedStateReducer) &&
         pluginKey &&
         pendingMessages?.length
       ) {
         const start = Date.now();
         this.idler = new Idler();
         processMessageQueue(
-          activePlugin,
+          isSandyPlugin(activePlugin)
+            ? target.sandyPluginStates.get(activePlugin.id)!
+            : activePlugin,
           pluginKey,
           this.store,
           (progress) => {
@@ -325,6 +332,26 @@ class PluginContainer extends PureComponent<Props, State> {
     );
   }
 
+  renderNoPluginActive() {
+    return (
+      <View grow>
+        <Waiting>
+          <VBox>
+            <Glyph
+              name="cup"
+              variant="outline"
+              size={24}
+              color={colors.light30}
+            />
+          </VBox>
+          <VBox>
+            <Label>No plugin selected</Label>
+          </VBox>
+        </Waiting>
+      </View>
+    );
+  }
+
   renderPlugin() {
     const {
       pluginState,
@@ -338,17 +365,17 @@ class PluginContainer extends PureComponent<Props, State> {
     } = this.props;
     if (!activePlugin || !target || !pluginKey) {
       console.warn(`No selected plugin. Rendering empty!`);
-      return null;
+      return this.renderNoPluginActive();
     }
     let pluginElement: null | React.ReactElement<any>;
     if (isSandyPlugin(activePlugin)) {
       // Make sure we throw away the container for different pluginKey!
-      pluginElement = (
-        <SandyPluginRenderer
-          key={pluginKey}
-          plugin={target.sandyPluginStates.get(activePlugin.id)!}
-        />
-      );
+      const instance = target.sandyPluginStates.get(activePlugin.id);
+      if (!instance) {
+        // happens if we selected a plugin that is not enabled on a specific app or not supported on a specific device.
+        return this.renderNoPluginActive();
+      }
+      pluginElement = <SandyPluginRenderer key={pluginKey} plugin={instance} />;
     } else {
       const props: PluginProps<Object> & {
         key: string;

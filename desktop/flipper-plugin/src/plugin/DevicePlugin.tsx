@@ -15,12 +15,12 @@ export type DeviceLogListener = (entry: DeviceLogEntry) => void;
 
 export type DeviceLogEntry = {
   readonly date: Date;
+  readonly type: LogLevel;
+  readonly message: string;
   readonly pid: number;
   readonly tid: number;
   readonly app?: string;
-  readonly type: LogLevel;
   readonly tag: string;
-  readonly message: string;
 };
 
 export type LogLevel =
@@ -33,6 +33,7 @@ export type LogLevel =
   | 'fatal';
 
 export interface Device {
+  readonly realDevice: any; // TODO: temporarily, clean up T70688226
   readonly isArchived: boolean;
   readonly os: string;
   readonly deviceType: DeviceType;
@@ -77,6 +78,7 @@ export class SandyDevicePluginInstance extends BasePluginInstance {
   ) {
     super(flipperLib, definition, initialStates);
     const device: Device = {
+      realDevice, // TODO: temporarily, clean up T70688226
       // N.B. we model OS as string, not as enum, to make custom device types possible in the future
       os: realDevice.os,
       isArchived: realDevice.isArchived,

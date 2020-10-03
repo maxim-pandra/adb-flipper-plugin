@@ -25,7 +25,9 @@ import KeyboardShortcutInput from './settings/KeyboardShortcutInput';
 import {isEqual} from 'lodash';
 import restartFlipper from '../utils/restartFlipper';
 import LauncherSettingsPanel from '../fb-stubs/LauncherSettingsPanel';
+import SandySettingsPanel from '../fb-stubs/SandySettingsPanel';
 import {reportUsage} from '../utils/metrics';
+import {Modal} from 'antd';
 
 const Container = styled(FlexColumn)({
   padding: 20,
@@ -40,6 +42,7 @@ const Title = styled(Text)({
 });
 
 type OwnProps = {
+  useSandy?: boolean;
   onHide: () => void;
   platform: NodeJS.Platform;
 };
@@ -80,6 +83,46 @@ class SettingsSheet extends Component<Props, State> {
     });
   };
 
+  applyChangesWithoutRestart = async () => {
+    this.props.updateSettings(this.state.updatedSettings);
+    this.props.updateLauncherSettings(this.state.updatedLauncherSettings);
+    await flush();
+    this.props.onHide();
+  };
+
+  renderSandyContainer(
+    contents: React.ReactElement,
+    footer: React.ReactElement,
+  ) {
+    return (
+      <Modal
+        visible
+        onCancel={this.props.onHide}
+        width={570}
+        title="Settings"
+        footer={footer}>
+        <FlexColumn>{contents}</FlexColumn>
+      </Modal>
+    );
+  }
+
+  renderNativeContainer(
+    contents: React.ReactElement,
+    footer: React.ReactElement,
+  ) {
+    return (
+      <Container>
+        <Title>Settings</Title>
+        {contents}
+        <br />
+        <FlexRow>
+          <Spacer />
+          {footer}
+        </FlexRow>
+      </Container>
+    );
+  }
+
   render() {
     const {
       enableAndroid,
@@ -89,11 +132,17 @@ class SettingsSheet extends Component<Props, State> {
       enablePrefetching,
       idbPath,
       reactNative,
+      enableSandy,
+      darkMode,
     } = this.state.updatedSettings;
+    const {useSandy} = this.props;
 
-    return (
-      <Container>
-        <Title>Settings</Title>
+    const settingsPristine =
+      isEqual(this.props.settings, this.state.updatedSettings) &&
+      isEqual(this.props.launcherSettings, this.state.updatedLauncherSettings);
+
+    const contents = (
+      <>
         <ToggledSection
           label="Android Developer"
           toggled={enableAndroid}
@@ -183,6 +232,31 @@ class SettingsSheet extends Component<Props, State> {
             });
           }}
         />
+        <SandySettingsPanel
+          toggled={this.state.updatedSettings.enableSandy}
+          onChange={(v) => {
+            this.setState({
+              updatedSettings: {
+                ...this.state.updatedSettings,
+                enableSandy: v,
+              },
+            });
+          }}
+        />
+        {enableSandy && (
+          <ToggledSection
+            label="Enable dark theme"
+            toggled={darkMode}
+            onChange={(enabled) => {
+              this.setState((prevState) => ({
+                updatedSettings: {
+                  ...prevState.updatedSettings,
+                  darkMode: enabled,
+                },
+              }));
+            }}
+          />
+        )}
         <ToggledSection
           label="React Native keyboard shortcuts"
           toggled={reactNative.shortcuts.enabled}
@@ -237,29 +311,35 @@ class SettingsSheet extends Component<Props, State> {
             }}
           />
         </ToggledSection>
-        <br />
-        <FlexRow>
-          <Spacer />
-          <Button compact padded onClick={this.props.onHide}>
-            Cancel
-          </Button>
-          <Button
-            disabled={
-              isEqual(this.props.settings, this.state.updatedSettings) &&
-              isEqual(
-                this.props.launcherSettings,
-                this.state.updatedLauncherSettings,
-              )
-            }
-            type="primary"
-            compact
-            padded
-            onClick={this.applyChanges}>
-            Apply and Restart
-          </Button>
-        </FlexRow>
-      </Container>
+      </>
     );
+
+    const footer = (
+      <>
+        <Button compact padded onClick={this.props.onHide}>
+          Cancel
+        </Button>
+        <Button
+          disabled={settingsPristine}
+          compact
+          padded
+          onClick={this.applyChangesWithoutRestart}>
+          Apply
+        </Button>
+        <Button
+          disabled={settingsPristine}
+          type="primary"
+          compact
+          padded
+          onClick={this.applyChanges}>
+          Apply and Restart
+        </Button>
+      </>
+    );
+
+    return useSandy
+      ? this.renderSandyContainer(contents, footer)
+      : this.renderNativeContainer(contents, footer);
   }
 }
 

@@ -27,6 +27,8 @@ import {notNull} from './utils/typeUtils';
 import constants from './fb-stubs/constants';
 import {Logger} from './fb-interfaces/Logger';
 import {NormalizedMenuEntry, buildInMenuEntries} from 'flipper-plugin';
+import {StyleGuide} from './sandy-chrome/StyleGuide';
+import {showEmulatorLauncher} from './sandy-chrome/appinspect/LaunchEmulator';
 
 export type DefaultKeyboardAction = keyof typeof buildInMenuEntries;
 export type TopLevelMenu = 'Edit' | 'View' | 'Window' | 'Help';
@@ -226,6 +228,12 @@ function getTemplate(
   }
   const fileSubmenu: MenuItemConstructorOptions[] = [
     {
+      label: 'Launch Emulator...',
+      click() {
+        showEmulatorLauncher(store);
+      },
+    },
+    {
       label: 'Preferences',
       accelerator: 'Cmd+,',
       click: () => store.dispatch(setActiveSheet(ACTIVE_SHEET_SETTINGS)),
@@ -337,6 +345,12 @@ function getTemplate(
           label: 'Manage Plugins...',
           click: function () {
             store.dispatch(setActiveSheet(ACTIVE_SHEET_PLUGINS));
+          },
+        },
+        {
+          label: 'Flipper style guide',
+          click() {
+            store.dispatch(setStaticView(StyleGuide));
           },
         },
         {

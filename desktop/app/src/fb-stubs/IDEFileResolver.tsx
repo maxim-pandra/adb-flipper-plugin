@@ -7,11 +7,13 @@
  * @format
  */
 
+import {Element, ElementFramework} from 'flipper';
+
 export enum IDEType {
   'DIFFUSION',
   'AS',
-  'VSCODE',
   'XCODE',
+  'VSCODE',
 }
 
 export abstract class IDEFileResolver {
@@ -31,7 +33,37 @@ export abstract class IDEFileResolver {
     throw new Error('Method not implemented.');
   }
 
-  static getBestPath(_paths: string[], _className: string): string {
+  static async getLithoComponentPath(_className: string): Promise<string> {
+    throw new Error('Method not implemented.');
+  }
+
+  static async getCKComponentPath(_className: string): Promise<string> {
+    throw new Error('Method not implemented.');
+  }
+
+  static getBestPath(
+    _paths: string[],
+    _className: string,
+    _extension?: string,
+  ): string {
+    throw new Error('Method not implemented.');
+  }
+
+  static async resolvePath(
+    _className: string,
+    _framework: string,
+  ): Promise<string> {
+    throw new Error('Method not implemented.');
+  }
+
+  static isElementFromFramework(
+    _node: Element,
+    _framework: ElementFramework,
+  ): boolean {
+    throw new Error('Method not implemented.');
+  }
+
+  static isElementFromSupportedFramework(_node: Element): boolean {
     throw new Error('Method not implemented.');
   }
 }

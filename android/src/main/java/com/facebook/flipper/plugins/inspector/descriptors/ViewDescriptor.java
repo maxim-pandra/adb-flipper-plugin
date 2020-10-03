@@ -34,6 +34,7 @@ import com.facebook.flipper.plugins.inspector.HighlightedOverlay;
 import com.facebook.flipper.plugins.inspector.InspectorValue;
 import com.facebook.flipper.plugins.inspector.Named;
 import com.facebook.flipper.plugins.inspector.NodeDescriptor;
+import com.facebook.flipper.plugins.inspector.SetDataOperations;
 import com.facebook.flipper.plugins.inspector.Touch;
 import com.facebook.flipper.plugins.inspector.descriptors.utils.AccessibilityEvaluationUtil;
 import com.facebook.flipper.plugins.inspector.descriptors.utils.AccessibilityRoleUtil;
@@ -109,7 +110,7 @@ public class ViewDescriptor extends NodeDescriptor<View> {
             .put("height", InspectorValue.mutable(node.getHeight()))
             .put("width", InspectorValue.mutable(node.getWidth()))
             .put("alpha", InspectorValue.mutable(node.getAlpha()))
-            .put("visibility", sVisibilityMapping.get(node.getVisibility()))
+            .put("visibility", sVisibilityMapping.toPicker(node.getVisibility()))
             .put("background", fromDrawable(node.getBackground()))
             .put("tag", InspectorValue.mutable(node.getTag()))
             .put("keyedTags", getTags(node))
@@ -156,9 +157,9 @@ public class ViewDescriptor extends NodeDescriptor<View> {
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
       viewProps
-          .put("layoutDirection", sLayoutDirectionMapping.get(node.getLayoutDirection()))
-          .put("textDirection", sTextDirectionMapping.get(node.getTextDirection()))
-          .put("textAlignment", sTextAlignmentMapping.get(node.getTextAlignment()));
+          .put("layoutDirection", sLayoutDirectionMapping.toPicker(node.getLayoutDirection()))
+          .put("textDirection", sTextDirectionMapping.toPicker(node.getTextDirection()))
+          .put("textAlignment", sTextAlignmentMapping.toPicker(node.getTextAlignment()));
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -202,7 +203,11 @@ public class ViewDescriptor extends NodeDescriptor<View> {
 
   @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
   @Override
-  public void setValue(View node, String[] path, FlipperDynamic value) {
+  public void setValue(
+      View node,
+      String[] path,
+      @Nullable SetDataOperations.FlipperValueHint kind,
+      FlipperDynamic value) {
     if (path[0].equals(axViewPropsTitle)
         || path[0].equals(axNodeInfoPropsTitle)
         || path[0].equals(axTalkbackPropsTitle)) {
@@ -225,7 +230,10 @@ public class ViewDescriptor extends NodeDescriptor<View> {
         node.setVisibility(sVisibilityMapping.get(value.asString()));
         break;
       case "layoutParams":
-        setLayoutParams(node, Arrays.copyOfRange(path, 1, path.length), value);
+        // path is [view, layoutParams, value] and we only want the values
+        if (path.length > 2) {
+          setLayoutParams(node, Arrays.copyOfRange(path, 2, path.length), value);
+        }
         break;
       case "layoutDirection":
         node.setLayoutDirection(sLayoutDirectionMapping.get(value.asString()));
@@ -590,14 +598,14 @@ public class ViewDescriptor extends NodeDescriptor<View> {
 
     if (layoutParams instanceof FrameLayout.LayoutParams) {
       final FrameLayout.LayoutParams frameLayoutParams = (FrameLayout.LayoutParams) layoutParams;
-      params.put("gravity", sGravityMapping.get(frameLayoutParams.gravity));
+      params.put("gravity", sGravityMapping.toPicker(frameLayoutParams.gravity));
     }
 
     if (layoutParams instanceof LinearLayout.LayoutParams) {
       final LinearLayout.LayoutParams linearLayoutParams = (LinearLayout.LayoutParams) layoutParams;
       params
           .put("weight", InspectorValue.mutable(linearLayoutParams.weight))
-          .put("gravity", sGravityMapping.get(linearLayoutParams.gravity));
+          .put("gravity", sGravityMapping.toPicker(linearLayoutParams.gravity));
     }
 
     return params.build();

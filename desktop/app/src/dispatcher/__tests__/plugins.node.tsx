@@ -8,16 +8,17 @@
  */
 
 jest.mock('../../defaultPlugins');
+jest.mock('../../utils/loadDynamicPlugins');
 import dispatcher, {
   getDynamicPlugins,
   checkDisabled,
   checkGK,
-  requirePlugin,
+  createRequirePluginFunction,
   filterNewestVersionOfEachPlugin,
 } from '../plugins';
 import {PluginDetails} from 'flipper-plugin-lib';
 import path from 'path';
-import {ipcRenderer, remote} from 'electron';
+import {remote} from 'electron';
 import {FlipperPlugin} from 'flipper';
 import reducers, {State} from '../../reducers/index';
 import {getInstance} from '../../fb-stubs/Logger';
@@ -26,6 +27,10 @@ import {TEST_PASSING_GK, TEST_FAILING_GK} from '../../fb-stubs/GK';
 import TestPlugin from './TestPlugin';
 import {resetConfigForTesting} from '../../utils/processConfig';
 import {SandyPluginDefinition} from 'flipper-plugin';
+import {mocked} from 'ts-jest/utils';
+import loadDynamicPlugins from '../../utils/loadDynamicPlugins';
+
+const loadDynamicPluginsMock = mocked(loadDynamicPlugins);
 
 const mockStore = configureStore<State, {}>([])(
   reducers(undefined, {type: 'INIT'}),
@@ -47,31 +52,24 @@ const samplePluginDetails: PluginDetails = {
 
 beforeEach(() => {
   resetConfigForTesting();
+  loadDynamicPluginsMock.mockResolvedValue([]);
 });
 
-test('dispatcher dispatches REGISTER_PLUGINS', () => {
-  dispatcher(mockStore, logger);
+afterEach(() => {
+  loadDynamicPluginsMock.mockClear();
+});
+
+test('dispatcher dispatches REGISTER_PLUGINS', async () => {
+  await dispatcher(mockStore, logger);
   const actions = mockStore.getActions();
   expect(actions.map((a) => a.type)).toContain('REGISTER_PLUGINS');
 });
 
-test('getDynamicPlugins returns empty array on errors', () => {
-  const sendSyncMock = jest.fn();
-  sendSyncMock.mockImplementation(() => {
-    throw new Error('ooops');
-  });
-  ipcRenderer.sendSync = sendSyncMock;
-  const res = getDynamicPlugins();
+test('getDynamicPlugins returns empty array on errors', async () => {
+  const loadDynamicPluginsMock = mocked(loadDynamicPlugins);
+  loadDynamicPluginsMock.mockRejectedValue(new Error('ooops'));
+  const res = await getDynamicPlugins();
   expect(res).toEqual([]);
-});
-
-test('getDynamicPlugins from main process via ipc', () => {
-  const plugins = [{name: 'test'}];
-  const sendSyncMock = jest.fn();
-  sendSyncMock.mockReturnValue(plugins);
-  ipcRenderer.sendSync = sendSyncMock;
-  const res = getDynamicPlugins();
-  expect(res).toEqual(plugins);
 });
 
 test('checkDisabled', () => {
@@ -138,7 +136,7 @@ test('checkGK for failing plugin', () => {
 });
 
 test('requirePlugin returns null for invalid requires', () => {
-  const requireFn = requirePlugin([], {}, require);
+  const requireFn = createRequirePluginFunction([], require);
   const plugin = requireFn({
     ...samplePluginDetails,
     name: 'pluginID',
@@ -151,7 +149,7 @@ test('requirePlugin returns null for invalid requires', () => {
 
 test('requirePlugin loads plugin', () => {
   const name = 'pluginID';
-  const requireFn = requirePlugin([], {}, require);
+  const requireFn = createRequirePluginFunction([], require);
   const plugin = requireFn({
     ...samplePluginDetails,
     name,
@@ -238,7 +236,7 @@ test('bundled versions are used when env var FLIPPER_DISABLE_PLUGIN_AUTO_UPDATE 
 
 test('requirePlugin loads valid Sandy plugin', () => {
   const name = 'pluginID';
-  const requireFn = requirePlugin([], {}, require);
+  const requireFn = createRequirePluginFunction([], require);
   const plugin = requireFn({
     ...samplePluginDetails,
     name,
@@ -272,7 +270,7 @@ test('requirePlugin loads valid Sandy plugin', () => {
 test('requirePlugin errors on invalid Sandy plugin', () => {
   const name = 'pluginID';
   const failedPlugins: any[] = [];
-  const requireFn = requirePlugin(failedPlugins, {}, require);
+  const requireFn = createRequirePluginFunction(failedPlugins, require);
   requireFn({
     ...samplePluginDetails,
     name,
@@ -288,7 +286,7 @@ test('requirePlugin errors on invalid Sandy plugin', () => {
 
 test('requirePlugin loads valid Sandy Device plugin', () => {
   const name = 'pluginID';
-  const requireFn = requirePlugin([], {}, require);
+  const requireFn = createRequirePluginFunction([], require);
   const plugin = requireFn({
     ...samplePluginDetails,
     name,

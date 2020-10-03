@@ -37,7 +37,7 @@ import {
   Layout,
 } from 'flipper';
 
-import {FlipperClient, createState, usePlugin, useValue} from 'flipper-plugin';
+import {PluginClient, createState, usePlugin, useValue} from 'flipper-plugin';
 
 const Waiting = styled(FlexBox)({
   width: '100%',
@@ -62,6 +62,12 @@ const InfoBox = styled.div({
   textAlign: 'center',
 });
 
+const TreeContainer = styled.div({
+  width: '100%',
+  height: '100%',
+  overflow: 'hidden',
+});
+
 type Events = {
   addEvent: AddEventPayload;
   updateTreeGenerationHierarchyGeneration: UpdateTreeGenerationHierarchyGenerationPayload;
@@ -69,12 +75,17 @@ type Events = {
   updateTreeGenerationChangesetGeneration: UpdateTreeGenerationChangesetGenerationPayload;
 };
 
-export function plugin(client: FlipperClient<Events, {}>) {
+type FocusInfo = {
+  generationId: string;
+  treeNodeIndexPath?: number[];
+};
+
+export function plugin(client: PluginClient<Events, {}>) {
   const generations = createState<{[id: string]: TreeGeneration}>(
     {},
     {persist: 'generations'},
   );
-  const focusedGenerationId = createState<string | null>(null);
+  const focusInfo = createState<FocusInfo | undefined>(undefined);
   const recording = createState<boolean>(true);
 
   client.onMessage('addEvent', (data) => {
@@ -84,7 +95,10 @@ export function plugin(client: FlipperClient<Events, {}>) {
     generations.update((draft) => {
       draft[data.id] = {...data, changeSets: []};
     });
-    focusedGenerationId.set(focusedGenerationId.get() || data.id);
+    focusInfo.set({
+      generationId: focusInfo.get()?.generationId || data.id,
+      treeNodeIndexPath: undefined,
+    });
   });
   client.onMessage('updateTreeGenerationHierarchyGeneration', (data) => {
     generations.update((draft) => {
@@ -108,28 +122,68 @@ export function plugin(client: FlipperClient<Events, {}>) {
     'updateTreeGenerationChangesetGeneration',
     updateTreeGenerationChangeset,
   );
+  client.onDeepLink((payload) => {
+    if (typeof payload === 'string') {
+      handleDeepLinkPayload(payload);
+    }
+  });
+
+  function handleDeepLinkPayload(payload: string) {
+    // Payload expected to be something like
+    // 1.1.FBAnimatingComponent[0].CKFlexboxComponent[2].CKComponent where path components are separated by '.'
+    // - The first '1' is the scope root ID.
+    // - The numbers in square brackets are the indexes of the following component in the children array
+    // of the preceding component. In this example, the last CKComponent is the 2nd child of CKFlexboxComponent.
+    const pathComponents = payload.split('.');
+    const rootId = pathComponents[0];
+
+    const generationValues = Object.values(generations.get());
+    const mostRecentTreeBuild = generationValues.reverse().find((g) => {
+      return g.surface_key == rootId && g.reason == 'Tree Build';
+    });
+    if (mostRecentTreeBuild) {
+      const regex = /\w+\[(\d+)\]/;
+      const indexPath = pathComponents.reduce((acc, component) => {
+        const match = regex.exec(component);
+        if (match) {
+          acc.push(+match[1]);
+        }
+        return acc;
+      }, [] as number[]);
+      focusInfo.set({
+        generationId: mostRecentTreeBuild.id,
+        treeNodeIndexPath: indexPath,
+      });
+    }
+  }
 
   function setRecording(value: boolean) {
     recording.set(value);
   }
   function clear() {
     generations.set({});
-    focusedGenerationId.set(null);
+    focusInfo.set(undefined);
     recording.set(true);
   }
 
-  return {generations, focusedGenerationId, recording, setRecording, clear};
+  return {
+    generations,
+    focusInfo,
+    recording,
+    setRecording,
+    clear,
+  };
 }
 
 export function Component() {
   const instance = usePlugin(plugin);
   const generations = useValue(instance.generations);
-  const focusedGenerationId = useValue(instance.focusedGenerationId);
+  const focusInfo = useValue(instance.focusInfo);
   const recording = useValue(instance.recording);
 
   const [userSelectedGenerationId, setUserSelectedGenerationId] = useState<
-    string | null
-  >(null);
+    string | undefined
+  >();
   const [searchString, setSearchString] = useState<string>('');
   const [focusedChangeSet, setFocusedChangeSet] = useState<
     UpdateTreeGenerationChangesetApplicationPayload | null | undefined
@@ -137,12 +191,12 @@ export function Component() {
   const [selectedTreeNode, setSelectedTreeNode] = useState<any>();
 
   const focusedTreeGeneration: TreeGeneration | null = useMemo(() => {
-    const id = userSelectedGenerationId || focusedGenerationId;
-    if (id === null) {
+    const id = userSelectedGenerationId || focusInfo?.generationId;
+    if (id === undefined) {
       return null;
     }
     return generations[id];
-  }, [userSelectedGenerationId, focusedGenerationId, generations]);
+  }, [userSelectedGenerationId, focusInfo, generations]);
   const filteredGenerations: Array<TreeGeneration> = useMemo(() => {
     const generationValues = Object.values(generations);
     if (searchString.length <= 0) {
@@ -207,22 +261,25 @@ export function Component() {
             <EventTable
               generations={filteredGenerations}
               focusedGenerationId={
-                userSelectedGenerationId || focusedGenerationId
+                userSelectedGenerationId || focusInfo?.generationId
               }
-              onClick={(id: string | null) => {
+              onClick={(id?: string) => {
                 setFocusedChangeSet(null);
                 setUserSelectedGenerationId(id);
                 setSelectedTreeNode(null);
               }}
             />
           </Sidebar>
-          <Layout.Top>
-            <Sidebar position="top" minHeight={80} height={80}>
-              <TreeHierarchy
-                generation={focusedTreeGeneration}
-                focusedChangeSet={focusedChangeSet}
-                setSelectedTreeNode={setSelectedTreeNode}
-              />
+          <Layout.Top scrollable={false}>
+            <Sidebar position="top" minHeight={400} height={400}>
+              <TreeContainer>
+                <TreeHierarchy
+                  generation={focusedTreeGeneration}
+                  focusedChangeSet={focusedChangeSet}
+                  setSelectedTreeNode={setSelectedTreeNode}
+                  selectedNodeIndexPath={focusInfo?.treeNodeIndexPath}
+                />
+              </TreeContainer>
             </Sidebar>
             {focusedTreeGeneration && (
               <StackTrace
@@ -260,6 +317,7 @@ function TreeHierarchy({
   generation,
   focusedChangeSet,
   setSelectedTreeNode,
+  selectedNodeIndexPath,
 }: {
   generation: TreeGeneration | null;
   focusedChangeSet:
@@ -267,6 +325,7 @@ function TreeHierarchy({
     | null
     | undefined;
   setSelectedTreeNode: (node: any) => void;
+  selectedNodeIndexPath?: number[];
 }) {
   const onNodeClicked = useMemo(
     () => (targetNode: any) => {
@@ -294,13 +353,20 @@ function TreeHierarchy({
 
   if (generation && generation.tree && generation.tree.length > 0) {
     // Display component tree hierarchy, if any
-    return <Tree data={generation.tree} nodeClickHandler={onNodeClicked} />;
+    return (
+      <Tree
+        data={generation.tree}
+        nodeClickHandler={onNodeClicked}
+        selectedNodeIndexPath={selectedNodeIndexPath}
+      />
+    );
   } else if (focusedChangeSet && focusedChangeSet.section_component_hierarchy) {
     // Display section component hierarchy for specific changeset
     return (
       <Tree
         data={focusedChangeSet.section_component_hierarchy}
         nodeClickHandler={onNodeClicked}
+        selectedNodeIndexPath={selectedNodeIndexPath}
       />
     );
   } else {

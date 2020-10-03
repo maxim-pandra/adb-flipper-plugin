@@ -22,7 +22,7 @@ import {
   SmallText,
 } from 'flipper';
 import {decodeBody, getHeaderValue} from './utils';
-import {formatBytes} from './index';
+import {formatBytes, BodyOptions} from './index';
 import React from 'react';
 
 import querystring from 'querystring';
@@ -54,26 +54,14 @@ const KeyValueColumns = {
 type RequestDetailsProps = {
   request: Request;
   response: Response | null | undefined;
-};
-
-type RequestDetailsState = {
   bodyFormat: string;
+  onSelectFormat: (bodyFormat: string) => void;
 };
-
-export default class RequestDetails extends Component<
-  RequestDetailsProps,
-  RequestDetailsState
-> {
+export default class RequestDetails extends Component<RequestDetailsProps> {
   static Container = styled(FlexColumn)({
     height: '100%',
     overflow: 'auto',
   });
-  static BodyOptions = {
-    formatted: 'formatted',
-    parsed: 'parsed',
-  };
-
-  state: RequestDetailsState = {bodyFormat: RequestDetails.BodyOptions.parsed};
 
   urlColumns = (url: URL) => {
     return [
@@ -120,16 +108,11 @@ export default class RequestDetails extends Component<
     ];
   };
 
-  onSelectFormat = (bodyFormat: string) => {
-    this.setState(() => ({bodyFormat}));
-  };
-
   render() {
-    const {request, response} = this.props;
+    const {request, response, bodyFormat, onSelectFormat} = this.props;
     const url = new URL(request.url);
 
-    const {bodyFormat} = this.state;
-    const formattedText = bodyFormat == RequestDetails.BodyOptions.formatted;
+    const formattedText = bodyFormat == BodyOptions.formatted;
 
     return (
       <RequestDetails.Container>
@@ -215,8 +198,8 @@ export default class RequestDetails extends Component<
             grow
             label="Body"
             selected={bodyFormat}
-            onChange={this.onSelectFormat}
-            options={RequestDetails.BodyOptions}
+            onChange={onSelectFormat}
+            options={BodyOptions}
           />
         </Panel>
         {response && response.insights ? (
@@ -495,8 +478,17 @@ class ImageWithSize extends Component<ImageWithSizeProps, ImageWithSizeState> {
 
 class ImageFormatter {
   formatResponse = (request: Request, response: Response) => {
-    if (getHeaderValue(response.headers, 'content-type').startsWith('image')) {
-      return <ImageWithSize src={request.url} />;
+    if (getHeaderValue(response.headers, 'content-type').startsWith('image/')) {
+      if (response.data) {
+        const src = `data:${getHeaderValue(
+          response.headers,
+          'content-type',
+        )};base64,${response.data}`;
+        return <ImageWithSize src={src} />;
+      } else {
+        // fallback to using the request url
+        return <ImageWithSize src={request.url} />;
+      }
     }
   };
 }
@@ -509,7 +501,7 @@ class VideoFormatter {
 
   formatResponse = (request: Request, response: Response) => {
     const contentType = getHeaderValue(response.headers, 'content-type');
-    if (contentType.startsWith('video')) {
+    if (contentType.startsWith('video/')) {
       return (
         <MediaContainer>
           <VideoFormatter.Video controls={true}>
@@ -561,7 +553,7 @@ class JSONTextFormatter {
     );
   };
 
-  formatResponse = (request: Request, response: Response) => {
+  formatResponse = (_request: Request, response: Response) => {
     return this.format(
       decodeBody(response),
       getHeaderValue(response.headers, 'content-type'),
@@ -597,7 +589,7 @@ class XMLTextFormatter {
     );
   };
 
-  formatResponse = (request: Request, response: Response) => {
+  formatResponse = (_request: Request, response: Response) => {
     return this.format(
       decodeBody(response),
       getHeaderValue(response.headers, 'content-type'),
@@ -619,7 +611,7 @@ class JSONFormatter {
     );
   };
 
-  formatResponse = (request: Request, response: Response) => {
+  formatResponse = (_request: Request, response: Response) => {
     return this.format(
       decodeBody(response),
       getHeaderValue(response.headers, 'content-type'),
@@ -723,7 +715,7 @@ class GraphQLFormatter {
     }
   };
 
-  formatResponse = (request: Request, response: Response) => {
+  formatResponse = (_request: Request, response: Response) => {
     return this.format(
       decodeBody(response),
       getHeaderValue(response.headers, 'content-type'),

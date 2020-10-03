@@ -5,16 +5,16 @@
 
 folly_compiler_flags = '-DDEBUG=1 -DFLIPPER_OSS=1 -DFB_SONARKIT_ENABLED=1 -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_HAVE_LIBGFLAGS=0 -DFOLLY_HAVE_LIBJEMALLOC=0 -DFOLLY_HAVE_PREADV=0 -DFOLLY_HAVE_PWRITEV=0 -DFOLLY_HAVE_TFO=0 -DFOLLY_USE_SYMBOLIZER=0'
 yogakit_version = '~> 1.18'
-flipperkit_version = '0.52.1'
+flipperkit_version = '0.60.0'
 Pod::Spec.new do |spec|
   spec.name = 'FlipperKit'
   spec.version = flipperkit_version
   spec.license = { :type => 'MIT' }
-  spec.homepage = 'https://github.com/facebook/Sonar'
+  spec.homepage = 'https://github.com/facebook/flipper'
   spec.summary = 'Sonar iOS podspec'
   spec.authors = 'Facebook'
   spec.static_framework = true
-  spec.source = { :git => 'https://github.com/facebook/Sonar.git',
+  spec.source = { :git => 'https://github.com/facebook/flipper.git',
                   :tag=> "v"+flipperkit_version }
   spec.module_name = 'FlipperKit'
   spec.platforms = { :ios => "9.0" }

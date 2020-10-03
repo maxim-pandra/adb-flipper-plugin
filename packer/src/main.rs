@@ -5,15 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#![warn(
-    clippy::all,
-    clippy::restriction,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+// This doesn't seem to cause any issues and nobody I know can read \u{1234} by heart.
+#![allow(clippy::non_ascii_literal)]
 
 mod error;
+mod tarsum;
 mod types;
 
 use anyhow::{bail, Context, Result};
@@ -21,9 +18,9 @@ use clap::value_t_or_exit;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Write};
 use std::path;
-use types::{PackType, Platform};
+use types::{HashSum, PackType, Platform};
 
 const DEFAULT_PACKLIST: &str = include_str!("packlist.yaml");
 // This is to ensure that all progress bar prefixes are aligned.
@@ -35,11 +32,16 @@ type PackListPlatform = BTreeMap<PackType, Vec<path::PathBuf>>;
 struct PackList(pub BTreeMap<Platform, PackListPlatform>);
 
 #[derive(Debug, serde::Serialize)]
-struct HashSum(String);
+struct PackFile {
+    file_name: String,
+    intrinsic_checksum: HashSum,
+    extrinsic_checksum: HashSum,
+    file_bytes: u64,
+}
 
 #[derive(Debug, serde::Serialize)]
 struct PackManifest {
-    files: BTreeMap<PackType, HashSum>,
+    files: BTreeMap<PackType, PackFile>,
 }
 
 fn default_progress_bar(len: u64) -> indicatif::ProgressBar {
@@ -53,7 +55,7 @@ fn default_progress_bar(len: u64) -> indicatif::ProgressBar {
 }
 
 fn pack(
-    platform: &Platform,
+    platform: Platform,
     dist_dir: &std::path::PathBuf,
     pack_list: &PackList,
     output_directory: &std::path::PathBuf,
@@ -66,11 +68,11 @@ fn pack(
     ));
     let packtype_paths = pack_list
         .0
-        .get(platform)
-        .ok_or_else(|| error::Error::MissingPlatformDefinition(*platform))?;
+        .get(&platform)
+        .ok_or_else(|| error::Error::MissingPlatformDefinition(platform))?;
     let res = packtype_paths
         .into_par_iter()
-        .map(|(pack_type, pack_files)| {
+        .map(|(&pack_type, pack_files)| {
             let output_path = path::Path::new(output_directory).join(format!("{}.tar", pack_type));
             let mut tar = tar::Builder::new(File::create(&output_path).with_context(|| {
                 format!(
@@ -86,7 +88,7 @@ fn pack(
             tar.finish()?;
             pb.inc(1);
 
-            Ok((*pack_type, output_path))
+            Ok((pack_type, output_path))
         })
         .collect();
 
@@ -95,10 +97,10 @@ fn pack(
 }
 
 fn pack_platform(
-    platform: &Platform,
+    platform: Platform,
     dist_dir: &std::path::PathBuf,
     pack_files: &[path::PathBuf],
-    pack_type: &PackType,
+    pack_type: PackType,
     tar_builder: &mut tar::Builder<File>,
 ) -> Result<()> {
     let base_dir = match platform {
@@ -112,7 +114,7 @@ fn pack_platform(
         let full_path = path::Path::new(&base_dir).join(f);
         if !full_path.exists() {
             bail!(error::Error::MissingPackFile(
-                *platform, *pack_type, full_path,
+                platform, pack_type, full_path,
             ));
         }
         if full_path.is_file() {
@@ -125,7 +127,8 @@ fn pack_platform(
     Ok(())
 }
 
-fn sha256_digest<R: Read>(mut reader: R) -> Result<HashSum> {
+/// Calculate the sha256 checksum of a file represented by a Reader.
+fn sha256_digest<R: io::Read>(mut reader: &mut R) -> Result<HashSum> {
     use sha2::{Digest, Sha256};
 
     let mut sha256 = Sha256::new();
@@ -168,13 +171,13 @@ fn main() -> Result<(), anyhow::Error> {
         shellexpand::tilde(args.value_of("dist").expect("argument has default")).to_string(),
     );
     let compress = !args.is_present("no-compression");
-    let pack_list_str = args
-        .value_of("packlist")
-        .map(|f| {
+    let pack_list_str = args.value_of("packlist").map_or_else(
+        || DEFAULT_PACKLIST.to_string(),
+        |f| {
             std::fs::read_to_string(f)
                 .unwrap_or_else(|e| panic!("Failed to open packfile {}: {}", f, e))
-        })
-        .unwrap_or_else(|| DEFAULT_PACKLIST.to_string());
+        },
+    );
     let pack_list: PackList =
         serde_yaml::from_str(&pack_list_str).expect("Failed to deserialize YAML packlist.");
     let output_directory =
@@ -185,13 +188,13 @@ fn main() -> Result<(), anyhow::Error> {
             output_directory.to_string_lossy()
         )
     })?;
-    let archive_paths = pack(&platform, &dist_dir, &pack_list, output_directory)?;
+    let archive_paths = pack(platform, &dist_dir, &pack_list, output_directory)?;
     let compressed_archive_paths = if compress {
-        compress_paths(&archive_paths)?
+        Some(compress_paths(&archive_paths)?)
     } else {
-        archive_paths
+        None
     };
-    manifest(&compressed_archive_paths, &output_directory)?;
+    manifest(&archive_paths, &compressed_archive_paths, output_directory)?;
 
     Ok(())
 }
@@ -237,10 +240,11 @@ fn compress_paths(
 
 fn manifest(
     archive_paths: &[(PackType, path::PathBuf)],
+    compressed_archive_paths: &Option<Vec<(PackType, path::PathBuf)>>,
     output_directory: &path::PathBuf,
 ) -> Result<path::PathBuf> {
-    let archive_manifest = gen_manifest(&archive_paths)?;
-    write_manifest(&output_directory, &archive_manifest)
+    let archive_manifest = gen_manifest(archive_paths, compressed_archive_paths)?;
+    write_manifest(output_directory, &archive_manifest)
 }
 
 fn write_manifest(
@@ -250,39 +254,74 @@ fn write_manifest(
     let path = path::PathBuf::from(output_directory).join("manifest.json");
     let mut file = File::create(&path)
         .with_context(|| format!("Failed to write manifest to {}", &path.to_string_lossy()))?;
-    file.write_all(&serde_json::to_string_pretty(archive_manifest)?.as_bytes())?;
+    file.write_all(serde_json::to_string_pretty(archive_manifest)?.as_bytes())?;
     Ok(path)
 }
 
-fn gen_manifest(archive_paths: &[(PackType, path::PathBuf)]) -> Result<PackManifest> {
+fn gen_manifest(
+    archive_paths: &[(PackType, path::PathBuf)],
+    compressed_archive_paths: &Option<Vec<(PackType, path::PathBuf)>>,
+) -> Result<PackManifest> {
     Ok(PackManifest {
-        files: gen_manifest_files(archive_paths)?,
+        files: gen_manifest_files(archive_paths, compressed_archive_paths)?,
     })
 }
 
 fn gen_manifest_files(
     archive_paths: &[(PackType, path::PathBuf)],
-) -> Result<BTreeMap<PackType, HashSum>> {
-    let pb = default_progress_bar(archive_paths.len() as u64 - 1);
+    compressed_archive_paths: &Option<Vec<(PackType, path::PathBuf)>>,
+) -> Result<BTreeMap<PackType, PackFile>> {
+    use std::iter;
+    let pb = default_progress_bar((archive_paths.len() as u64 - 1) * 2);
     pb.set_prefix(&format!(
         "{:width$}",
         "Computing manifest",
         width = PROGRESS_PREFIX_LEN
     ));
+    // This looks like a lot but we're just creating an iterator that either returns the
+    // values of `compressed_archive_paths` if it is `Some(_)` or an infinite repetition
+    // of `None`. This allows us to zip it below and avoid having to rely on index
+    // arithmetic. The `as _` is necessary to tell rustc to perform the casts from
+    // something like a `std::iter::Map` to the `Iterator` trait.
+    let compressed_iter: Box<dyn Iterator<Item = Option<&(PackType, path::PathBuf)>>> =
+        compressed_archive_paths.as_ref().map_or_else(
+            || Box::new(iter::repeat(None)) as _,
+            |inner| Box::new(inner.iter().map(Some)) as _,
+        );
+
     let res = archive_paths
+        .iter()
+        .zip(compressed_iter)
+        .collect::<Vec<_>>()
         .into_par_iter()
-        .map(|(pack_type, path)| {
-            let reader = BufReader::new(File::open(path)?);
-            let hash = sha256_digest(reader)?;
+        .map(|((pack_type, uncompressed_path), compressed)| {
+            // If we have a compressed path, use that one, otherwise fall back to uncompressed.
+            let path = compressed.map_or(uncompressed_path, |(_, p)| p);
+            let file_bytes = File::open(path)?.metadata()?.len();
+            let uncompressed_reader = BufReader::new(File::open(uncompressed_path)?);
+            let intrinsic_checksum = tarsum::tarsum(uncompressed_reader)?;
             pb.inc(1);
-            Ok((*pack_type, hash))
+            let extrinsic_checksum = sha256_digest(&mut BufReader::new(File::open(path)?))?;
+            pb.inc(1);
+            Ok((
+                *pack_type,
+                PackFile {
+                    file_name: path
+                        .file_name()
+                        // The file name is only indicative and must serialize well, so the lossy approximation is fine.
+                        .map_or_else(|| "".to_string(), |v| v.to_string_lossy().to_string()),
+                    intrinsic_checksum,
+                    extrinsic_checksum,
+                    file_bytes,
+                },
+            ))
         })
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .fold(
             BTreeMap::new(),
-            |mut acc: BTreeMap<PackType, HashSum>, (pack_type, hash_sum)| {
-                acc.insert(pack_type, hash_sum);
+            |mut acc: BTreeMap<_, _>, (pack_type, pack_file)| {
+                acc.insert(pack_type, pack_file);
                 acc
             },
         );
@@ -303,17 +342,21 @@ mod test {
 
     #[test]
     fn test_manifest() -> anyhow::Result<()> {
+        let artifact_path = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("__fixtures__")
+            .join("archive_a.tar");
         let tmp_dir = tempdir::TempDir::new("manifest_test")?;
-        let artifact_path = path::PathBuf::from(tmp_dir.path()).join("core.tar");
-        let mut artifact = File::create(&artifact_path)?;
-        artifact.write_all("Hello World.".as_bytes())?;
 
         let archive_paths = &[(PackType::Core, artifact_path)];
-        let path = manifest(archive_paths, &tmp_dir.path().to_path_buf())?;
+        let path = manifest(archive_paths, &None, &tmp_dir.path().to_path_buf())?;
 
         let manifest_content = std::fs::read_to_string(&path)?;
 
-        assert_eq!(manifest_content, "{\n  \"files\": {\n    \"core\": \"f4bb1975bf1f81f76ce824f7536c1e101a8060a632a52289d530a6f600d52c92\"\n  }\n}");
+        assert_eq!(
+            manifest_content,
+            "{\n  \"files\": {\n    \"core\": {\n      \"file_name\": \"archive_a.tar\",\n      \"intrinsic_checksum\": \"f360fae5e433bd5c0ac0e00dbdad22ec51691139b9ec1e6d0dbbe16e0bb4c568\",\n      \"extrinsic_checksum\": \"8de80c3904d85115d1595d48c215022e5db225c920811d4d2eee80586e6390c8\",\n      \"file_bytes\": 3072\n    }\n  }\n}"
+        );
 
         Ok(())
     }

@@ -85,7 +85,7 @@ const GrabMetroDevice = connect<
 }: GrabMetroDeviceStoreProps & GrabMetroDeviceOwnProps) {
   useEffect(() => {
     onHasDevice(metroDevice);
-  }, [metroDevice]);
+  }, [metroDevice, onHasDevice]);
   return null;
 });
 
@@ -150,8 +150,8 @@ export default class ReactDevTools extends FlipperDevicePlugin<
     let devToolsNode = findDevToolsNode();
     if (!devToolsNode) {
       devToolsNode = createDevToolsNode();
+      this.initializeDevTools(devToolsNode);
     }
-    this.initializeDevTools(devToolsNode);
     this.setStatus(
       ConnectionStatus.Initializing,
       'DevTools have been initialized, waiting for connection...',

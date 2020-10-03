@@ -56,7 +56,10 @@ export default class IOSDevice extends BaseDevice {
     const tmpImageName = uuid() + '.png';
     const tmpDirectory = (electron.app || electron.remote.app).getPath('temp');
     const tmpFilePath = path.join(tmpDirectory, tmpImageName);
-    const command = `xcrun simctl io booted screenshot ${tmpFilePath}`;
+    const command =
+      this.deviceType === 'emulator'
+        ? `xcrun simctl io booted screenshot ${tmpFilePath}`
+        : `idb screenshot --udid ${this.serial} ${tmpFilePath}`;
     return promisify(exec)(command)
       .then(() => promisify(fs.readFile)(tmpFilePath))
       .then((buffer) => {
@@ -227,7 +230,7 @@ class StripLogPrefix extends Transform {
 
   _transform(
     data: any,
-    encoding: string,
+    _encoding: string,
     callback: (err?: Error, data?: any) => void,
   ) {
     if (this.passedPrefix) {

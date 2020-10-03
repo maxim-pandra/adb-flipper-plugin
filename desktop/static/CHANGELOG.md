@@ -1,3 +1,46 @@
+# 0.60.0 (30/9/2020)
+
+ * [D23718455](https://github.com/facebook/flipper/search?q=D23718455&type=Commits) -  [Internal]
+
+
+# 0.59.0 (29/9/2020)
+
+ * [D23908151](https://github.com/facebook/flipper/search?q=D23908151&type=Commits) - 
+ * [D23729972](https://github.com/facebook/flipper/search?q=D23729972&type=Commits) -  Ability to reload single auto-updated plugin without full Flipper restart.
+
+
+# 0.58.0 (23/9/2020)
+
+ * [D23681402](https://github.com/facebook/flipper/search?q=D23681402&type=Commits) -  removed support for plugins packaged using legacy format (v1), so they won't appear in Plugin Manager anymore.
+ * [D23682756](https://github.com/facebook/flipper/search?q=D23682756&type=Commits) -  changed the way of plugin loading, and removed obsolete dependencies, which should reduce bundle size and startup time.
+ * [D23706701](https://github.com/facebook/flipper/search?q=D23706701&type=Commits) -  faster reload after plugin install/uninstall/update.
+ * [D23565000](https://github.com/facebook/flipper/search?q=D23565000&type=Commits) -  Flipper now uses Electron 10
+ * [D23027793](https://github.com/facebook/flipper/search?q=D23027793&type=Commits) -  [network] Allow user to create new mock routes by highlighting existing network requests in the Network plugin
+
+
+# 0.55.0 (1/9/2020)
+
+ * [D23345560](https://github.com/facebook/flipper/search?q=D23345560&type=Commits) -  Flipper Self inspection - Flipper Messages plugin added to dev builds to show messages sent/received from clients
+ * [D23369774](https://github.com/facebook/flipper/search?q=D23369774&type=Commits) -  React DevTools plugin: fixed issue when sometimes multiple copies of dev tools were opened.
+
+
+# 0.54.0 (25/8/2020)
+
+ * [D23198103](https://github.com/facebook/flipper/search?q=D23198103&type=Commits) -  Introduce 'Debug Logs' section to help users to troubleshoot issues or to provide more accurate reports.
+ * [D23220937](https://github.com/facebook/flipper/search?q=D23220937&type=Commits) -  Removed some irrelevant errors from startup flow
+ * [D23293248](https://github.com/facebook/flipper/search?q=D23293248&type=Commits) -  [Databases] Fixed escaping of column names, see #1426
+ * [D23292543](https://github.com/facebook/flipper/search?q=D23292543&type=Commits) -  Fixed react-native-flipper causing Android release builds to fail
+
+
+# 0.53.0 (19/8/2020)
+
+ * [D22999105](https://github.com/facebook/flipper/search?q=D22999105&type=Commits) -  Changelog entries now link to their GitHub commits
+ * [D22977811](https://github.com/facebook/flipper/search?q=D22977811&type=Commits) -  Allow user to change response code for a mock request
+ * [D22999905](https://github.com/facebook/flipper/search?q=D22999905&type=Commits) -  Android network inspector can now handle responses large than 1MB.
+ * [D22983828](https://github.com/facebook/flipper/search?q=D22983828&type=Commits) -  [Internal]
+ * [D23158628](https://github.com/facebook/flipper/search?q=D23158628&type=Commits) -  It is now possible to directly open CKComponents from the Layout inspect
+
+
 # 0.52.1 (6/8/2020)
 
  * D22922126 -  It is now possible to directly open source files from the Layout inspector

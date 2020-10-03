@@ -11,7 +11,14 @@ import type {SectionComponentHierarchy} from './Models';
 
 import {Glyph, PureComponent, styled, Toolbar, Spacer, colors} from 'flipper';
 import {Tree} from 'react-d3-tree';
-import React, {Fragment} from 'react';
+import React from 'react';
+
+const Container = styled.div({
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  width: '100%',
+});
 
 const Legend = styled.div((props) => ({
   color: colors.dark50,
@@ -43,9 +50,9 @@ const Label = styled.div({
   display: 'inline-block',
 });
 
-const Container = styled.div({
+const TreeContainer = styled.div({
+  flexGrow: 1,
   width: '100%',
-  height: '100%',
   overflow: 'hidden',
   background:
     'linear-gradient(-90deg,rgba(0,0,0,.02) 1px,transparent 0),linear-gradient(rgba(0,0,0,.02) 1px,transparent 0),linear-gradient(-90deg,rgba(0,0,0,.03) 1px,transparent 0),linear-gradient(rgba(0,0,0,.03) 1px,transparent 0)',
@@ -82,6 +89,7 @@ type TreeData = Array<{
 type Props = {
   data: TreeData | SectionComponentHierarchy;
   nodeClickHandler: (node: any) => void;
+  selectedNodeIndexPath?: number[];
 };
 
 type State = {
@@ -192,7 +200,20 @@ export default class extends PureComponent<Props, State> {
     });
 
     // find the root node
-    return tree.find((node) => !node.attributes.parent);
+    const root = tree.find((node) => !node.attributes.parent);
+
+    // Highlight the selected node
+    if (this.props.selectedNodeIndexPath && root) {
+      let cursor = root;
+      this.props.selectedNodeIndexPath.forEach((idx) => {
+        cursor = cursor.children[idx];
+      });
+      cursor.nodeSvgShape.shapeProps.strokeWidth = 2;
+      cursor.nodeSvgShape.shapeProps.stroke = colors.red;
+      cursor.nodeSvgShape.shapeProps.fill = colors.redTint;
+    }
+
+    return root;
   };
 
   treeFromHierarchy = (data: SectionComponentHierarchy): Object => {
@@ -245,43 +266,45 @@ export default class extends PureComponent<Props, State> {
 
   render() {
     return (
-      <Fragment>
-        <Container
+      <Container>
+        <TreeContainer
           ref={(ref) => {
             this.treeContainer = ref;
           }}>
-          <style>
-            {'.rd3t-tree-container foreignObject {overflow: visible;}'}
-          </style>
           {this.state.tree && (
-            <Tree
-              transitionDuration={0}
-              separation={{siblings: 0.5, nonSiblings: 0.5}}
-              data={this.state.tree}
-              translate={this.state.translate}
-              zoom={this.state.zoom}
-              nodeLabelComponent={{
-                render: (
-                  <NodeLabel onLabelClicked={this.props.nodeClickHandler} />
-                ),
-              }}
-              allowForeignObjects
-              nodeSvgShape={{
-                shape: 'circle',
-                shapeProps: {
-                  stroke: 'rgba(0,0,0,0.2)',
-                  strokeWidth: 1,
-                },
-              }}
-              styles={{
-                links: {
-                  stroke: '#b3b3b3',
-                },
-              }}
-              nodeSize={{x: 300, y: 100}}
-            />
+            <>
+              <style>
+                {'.rd3t-tree-container foreignObject {overflow: visible;}'}
+              </style>
+              <Tree
+                transitionDuration={0}
+                separation={{siblings: 0.5, nonSiblings: 0.5}}
+                data={this.state.tree}
+                translate={this.state.translate}
+                zoom={this.state.zoom}
+                nodeLabelComponent={{
+                  render: (
+                    <NodeLabel onLabelClicked={this.props.nodeClickHandler} />
+                  ),
+                }}
+                allowForeignObjects
+                nodeSvgShape={{
+                  shape: 'circle',
+                  shapeProps: {
+                    stroke: 'rgba(0,0,0,0.2)',
+                    strokeWidth: 1,
+                  },
+                }}
+                styles={{
+                  links: {
+                    stroke: '#b3b3b3',
+                  },
+                }}
+                nodeSize={{x: 300, y: 100}}
+              />
+            </>
           )}
-        </Container>
+        </TreeContainer>
         <Toolbar position="bottom" compact>
           <input
             type="range"
@@ -299,7 +322,7 @@ export default class extends PureComponent<Props, State> {
           <Legend color={colors.lemon}>Section triggered state update</Legend>
           <Legend color={colors.grape}>Section is dirty</Legend>
         </Toolbar>
-      </Fragment>
+      </Container>
     );
   }
 }

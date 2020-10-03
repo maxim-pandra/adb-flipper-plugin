@@ -20,6 +20,9 @@
 #import "SKTapListener.h"
 #import "SKTapListenerImpl.h"
 
+NSObject* parseLayoutEditorMessage(NSObject* message);
+NSObject* flattenLayoutEditorMessage(NSObject* field);
+
 @implementation FlipperKitLayoutPlugin {
   NSMapTable<NSString*, id>* _trackedObjects;
   NSString* _lastHighlightedNode;
@@ -246,6 +249,8 @@
     return;
   }
 
+  value = parseLayoutEditorMessage(value);
+
   SKNodeDescriptor* descriptor =
       [_descriptorMapper descriptorForClass:[node class]];
 
@@ -268,6 +273,45 @@
     [connection send:@"invalidateWithData"
           withParams:@{@"nodes" : nodesForInvalidation}];
   }
+}
+
+/**
+ Layout editor messages are tagged with the types they contain, allowing for
+ heterogeneous NSArray and NSDictionary supported by Android and iOS. The method
+ parseLayoutEditorMessage traverses the message and flattens the messages to
+ their original types.
+ */
+NSObject* parseLayoutEditorMessage(NSObject* message) {
+  if ([message isKindOfClass:[NSDictionary class]]) {
+    NSDictionary* wrapper = (NSDictionary*)message;
+    if (wrapper[@"kind"]) {
+      NSObject* newData = wrapper[@"data"];
+      return flattenLayoutEditorMessage(newData);
+    }
+  }
+  return message;
+}
+
+NSObject* flattenLayoutEditorMessage(NSObject* field) {
+  if ([field isKindOfClass:[NSDictionary class]]) {
+    NSDictionary* wrapper = (NSDictionary*)field;
+    NSMutableDictionary* dictionary =
+        [[NSMutableDictionary alloc] initWithCapacity:[wrapper count]];
+    for (NSString* key in wrapper) {
+      NSObject* value = wrapper[key];
+      dictionary[key] = parseLayoutEditorMessage(value);
+    }
+    return dictionary;
+  } else if ([field isKindOfClass:[NSArray class]]) {
+    NSArray* wrapper = (NSArray*)field;
+    NSMutableArray* array =
+        [[NSMutableArray alloc] initWithCapacity:[wrapper count]];
+    for (NSObject* value in wrapper) {
+      [array addObject:parseLayoutEditorMessage(value)];
+    }
+    return array;
+  }
+  return field;
 }
 
 - (void)onCallGetSearchResults:(NSString*)query
@@ -484,6 +528,7 @@
 
   NSMutableArray* attributes = [NSMutableArray new];
   NSMutableDictionary* data = [NSMutableDictionary new];
+  NSMutableDictionary* extraInfo = [NSMutableDictionary new];
 
   const auto* nodeAttributes = [nodeDescriptor attributesForNode:node];
   for (const SKNamed<NSString*>* namedPair in nodeAttributes) {
@@ -502,6 +547,11 @@
     data[namedPair.name] = namedPair.value;
   }
 
+  const auto* nodeExtraInfo = [nodeDescriptor extraInfoForNode:node];
+  for (const SKNamed<NSDictionary*>* namedPair in nodeExtraInfo) {
+    extraInfo[namedPair.name] = namedPair.value;
+  }
+
   NSMutableArray* children = [self getChildrenForNode:node
                                        withDescriptor:nodeDescriptor];
 
@@ -514,6 +564,7 @@
     @"attributes" : attributes,
     @"data" : data,
     @"decoration" : [nodeDescriptor decorationForNode:node] ?: @"(unknown)",
+    @"extraInfo" : extraInfo,
   };
 
   return nodeDic;

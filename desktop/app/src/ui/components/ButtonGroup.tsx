@@ -8,8 +8,9 @@
  */
 
 import styled from '@emotion/styled';
-import React, {Component} from 'react';
-import PropTypes from 'prop-types';
+import React, {createContext} from 'react';
+import {useIsSandy} from '../../sandy-chrome/SandyContext';
+import {Space} from 'antd';
 
 const ButtonGroupContainer = styled.div({
   display: 'inline-flex',
@@ -19,6 +20,8 @@ const ButtonGroupContainer = styled.div({
   },
 });
 ButtonGroupContainer.displayName = 'ButtonGroup:ButtonGroupContainer';
+
+export const ButtonGroupContext = createContext(false);
 
 /**
  * Group a series of buttons together.
@@ -31,18 +34,15 @@ ButtonGroupContainer.displayName = 'ButtonGroup:ButtonGroupContainer';
  *   </ButtonGroup>
  * ```
  */
-export default class ButtonGroup extends Component<{
-  children: React.ReactNode;
-}> {
-  static childContextTypes = {
-    inButtonGroup: PropTypes.bool,
-  };
-
-  getChildContext() {
-    return {inButtonGroup: true};
-  }
-
-  render() {
-    return <ButtonGroupContainer>{this.props.children}</ButtonGroupContainer>;
-  }
+export default function ButtonGroup({children}: {children: React.ReactNode}) {
+  const isSandy = useIsSandy(); // according to Ant design guides buttons should only be grouped if they are radios
+  return isSandy ? (
+    <ButtonGroupContext.Provider value={true}>
+      <Space>{children}</Space>
+    </ButtonGroupContext.Provider>
+  ) : (
+    <ButtonGroupContext.Provider value={true}>
+      <ButtonGroupContainer>{children}</ButtonGroupContainer>
+    </ButtonGroupContext.Provider>
+  );
 }

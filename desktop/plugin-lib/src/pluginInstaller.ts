@@ -23,15 +23,7 @@ import {
 } from './pluginPaths';
 import semver from 'semver';
 
-export type PluginMap = Map<string, PluginDetails>;
-
 const getTmpDir = promisify(tmp.dir) as () => Promise<string>;
-
-function providePluginManager(): PM {
-  return new PM({
-    ignoredDependencies: [/^flipper$/, /^react$/, /^react-dom$/, /^@types\//],
-  });
-}
 
 function providePluginManagerNoDependencies(): PM {
   return new PM({ignoredDependencies: [/.*/]});
@@ -51,7 +43,7 @@ function getPluginPendingInstallationsDir(name: string): string {
   );
 }
 
-function getPluginInstallationDir(name: string): string {
+export function getPluginInstallationDir(name: string): string {
   return path.join(
     pluginInstallationDir,
     replaceInvalidPathSegmentCharacters(name),
@@ -72,18 +64,9 @@ async function installPluginFromTempDir(
   const destinationDir = getPluginPendingInstallationDir(name, version);
 
   if (pluginDetails.specVersion == 1) {
-    // For first version of spec we need to install dependencies
-    const pluginManager = providePluginManager();
-    // install the plugin dependencies into node_modules
-    const nodeModulesDir = path.join(
-      await getTmpDir(),
-      `${name}-${version}-modules`,
+    throw new Error(
+      `Cannot install plugin ${pluginDetails.name} because it is packaged using the unsupported format v1. Please encourage the plugin author to update to v2, following the instructions on https://fbflipper.com/docs/extending/js-setup#migration-to-the-new-plugin-specification`,
     );
-    pluginManager.options.pluginsPath = nodeModulesDir;
-    await pluginManager.installFromPath(sourceDir);
-    // live-plugin-manager also installs plugin itself into the target dir, it's better remove it
-    await fs.remove(path.join(nodeModulesDir, name));
-    await fs.move(nodeModulesDir, path.join(sourceDir, 'node_modules'));
   }
 
   try {
@@ -110,7 +93,7 @@ async function installPluginFromTempDir(
     }
     throw err;
   }
-  return pluginDetails;
+  return await getPluginDetails(destinationDir);
 }
 
 async function getPluginRootDir(dir: string) {
@@ -183,83 +166,11 @@ export async function installPluginFromFile(
   }
 }
 
-export async function getInstalledPlugins(): Promise<PluginMap> {
-  const pluginDirExists = await fs.pathExists(pluginInstallationDir);
-  if (!pluginDirExists) {
-    return new Map();
-  }
-  const dirs = await fs.readdir(pluginInstallationDir);
-  const plugins = await Promise.all<[string, PluginDetails]>(
-    dirs.map(
-      (dirName) =>
-        new Promise(async (resolve, reject) => {
-          const pluginDir = path.join(pluginInstallationDir, dirName);
-          if (!(await fs.lstat(pluginDir)).isDirectory()) {
-            return resolve(undefined);
-          }
-          try {
-            const details = await getPluginDetails(pluginDir);
-            resolve([details.name, details]);
-          } catch (e) {
-            reject(e);
-          }
-        }),
-    ),
-  );
-  return new Map(plugins.filter(Boolean));
-}
-
-export async function getPendingInstallationPlugins(): Promise<PluginMap> {
-  const pluginDirExists = await fs.pathExists(pluginPendingInstallationDir);
-  if (!pluginDirExists) {
-    return new Map();
-  }
-  const dirs = await fs.readdir(pluginPendingInstallationDir);
-  const plugins = await Promise.all<[string, PluginDetails]>(
-    dirs.map(
-      (dirName) =>
-        new Promise(async (resolve, reject) => {
-          const versions = (
-            await fs.readdir(path.join(pluginPendingInstallationDir, dirName))
-          ).sort((v1, v2) => semver.compare(v2, v1, true));
-          if (versions.length === 0) {
-            return resolve(undefined);
-          }
-          const pluginDir = path.join(
-            pluginPendingInstallationDir,
-            dirName,
-            versions[0],
-          );
-          if (!(await fs.lstat(pluginDir)).isDirectory()) {
-            return resolve(undefined);
-          }
-          try {
-            const details = await getPluginDetails(pluginDir);
-            resolve([details.name, details]);
-          } catch (e) {
-            reject(e);
-          }
-        }),
-    ),
-  );
-  return new Map(plugins.filter(Boolean));
-}
-
-export async function getPendingAndInstalledPlugins(): Promise<PluginMap> {
-  const plugins = await getInstalledPlugins();
-  for (const [name, details] of await getPendingInstallationPlugins()) {
-    if (
-      !plugins.get(name) ||
-      semver.gt(details.version, plugins.get(name)!.version)
-    ) {
-      plugins.set(name, details);
-    }
-  }
-  return plugins;
-}
-
 export async function removePlugin(name: string): Promise<void> {
-  await fs.remove(getPluginInstallationDir(name));
+  await Promise.all([
+    fs.remove(getPluginInstallationDir(name)),
+    fs.remove(getPluginPendingInstallationsDir(name)),
+  ]);
 }
 
 export async function finishPendingPluginInstallations() {

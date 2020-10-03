@@ -9,10 +9,11 @@
 
 const fbjs = require('eslint-config-fbjs');
 
-// enforces copyright header and @format directive to be present in every file
+// enforces copy-right header and @format directive to be present in every file
 const pattern = /^\*\r?\n[\S\s]*Facebook[\S\s]* \* @format\r?\n/;
 
 const builtInModules = [
+  'fb-qpl-xplat',
   'flipper',
   'flipper-plugin',
   'flipper-plugin-lib',
@@ -24,7 +25,7 @@ const builtInModules = [
   '@emotion/styled',
 ];
 
-const prettierConfig = require('./.prettierrc');
+const prettierConfig = require('./.prettierrc.json');
 
 module.exports = {
   parser: 'babel-eslint',
@@ -75,7 +76,9 @@ module.exports = {
   settings: {
     'import/resolver': {
       typescript: {
+        alwaysTryTypes: true,
         extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        project: '.',
       },
     },
   },
@@ -85,6 +88,15 @@ module.exports = {
       parser: '@typescript-eslint/parser',
       rules: {
         'prettier/prettier': [2, {...prettierConfig, parser: 'typescript'}],
+        // following rules are disabled because TS already handles it
+        'no-undef': 0,
+        'import/no-unresolved': 0,
+        // following rules are disabled because they don't handle TS correctly,
+        // while their @typescript-eslint counterpart does
+        // for reference: https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/README.md#extension-rules
+        'no-unused-vars': 0,
+        'no-redeclare': 0,
+        '@typescript-eslint/no-redeclare': 1,
         '@typescript-eslint/no-unused-vars': [
           1,
           {

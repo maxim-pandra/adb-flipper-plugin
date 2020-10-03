@@ -10,7 +10,7 @@
 import Interactive from './Interactive';
 import FlexColumn from './FlexColumn';
 import {colors} from './colors';
-import {Component} from 'react';
+import {Component, ReactNode} from 'react';
 import styled from '@emotion/styled';
 import {
   BackgroundClipProperty,
@@ -19,6 +19,9 @@ import {
   BackgroundColorProperty,
 } from 'csstype';
 import React from 'react';
+import FlexRow from './FlexRow';
+import {MoreOutlined} from '@ant-design/icons';
+import {theme} from '../../sandy-chrome/theme';
 
 const SidebarInteractiveContainer = styled(Interactive)({
   flex: 'none',
@@ -31,12 +34,18 @@ const SidebarContainer = styled(FlexColumn)<{
   position: 'right' | 'top' | 'left' | 'bottom';
   backgroundColor?: BackgroundClipProperty;
   overflow?: boolean;
+  unstyled?: boolean;
 }>((props) => ({
-  backgroundColor: props.backgroundColor || colors.macOSTitleBarBackgroundBlur,
-  borderLeft: props.position === 'right' ? '1px solid #b3b3b3' : 'none',
-  borderTop: props.position === 'bottom' ? '1px solid #b3b3b3' : 'none',
-  borderRight: props.position === 'left' ? '1px solid #b3b3b3' : 'none',
-  borderBottom: props.position === 'top' ? '1px solid #b3b3b3' : 'none',
+  ...(props.unstyled
+    ? undefined
+    : {
+        backgroundColor:
+          props.backgroundColor || colors.macOSTitleBarBackgroundBlur,
+        borderLeft: props.position === 'right' ? '1px solid #b3b3b3' : 'none',
+        borderTop: props.position === 'bottom' ? '1px solid #b3b3b3' : 'none',
+        borderRight: props.position === 'left' ? '1px solid #b3b3b3' : 'none',
+        borderBottom: props.position === 'top' ? '1px solid #b3b3b3' : 'none',
+      }),
   height: '100%',
   overflowX: 'hidden',
   overflowY: 'auto',
@@ -93,6 +102,10 @@ type SidebarProps = {
    * Class name to customise styling.
    */
   className?: string;
+  /**
+   * use a Sandy themed large gutter
+   */
+  gutter?: boolean;
 };
 
 type SidebarState = {
@@ -138,7 +151,7 @@ export default class Sidebar extends Component<SidebarProps, SidebarState> {
   };
 
   render() {
-    const {backgroundColor, onResize, position, children} = this.props;
+    const {backgroundColor, onResize, position, children, gutter} = this.props;
     let height: number | undefined;
     let minHeight: number | undefined;
     let maxHeight: number | undefined;
@@ -162,32 +175,99 @@ export default class Sidebar extends Component<SidebarProps, SidebarState> {
     }
 
     const horizontal = position === 'left' || position === 'right';
+    const gutterWidth = gutter ? theme.space.large : 0;
 
     if (horizontal) {
       width = width == null ? 200 : width;
-      minWidth = minWidth == null ? 100 : minWidth;
+      minWidth = (minWidth == null ? 100 : minWidth) + gutterWidth;
       maxWidth = maxWidth == null ? 600 : maxWidth;
     } else {
       height = height == null ? 200 : height;
       minHeight = minHeight == null ? 100 : minHeight;
       maxHeight = maxHeight == null ? 600 : maxHeight;
     }
-
     return (
       <SidebarInteractiveContainer
         className={this.props.className}
         minWidth={minWidth}
         maxWidth={maxWidth}
-        width={horizontal ? (onResize ? width : this.state.width) : undefined}
+        width={
+          horizontal
+            ? !children
+              ? gutterWidth
+              : onResize
+              ? width
+              : this.state.width
+            : undefined
+        }
         minHeight={minHeight}
         maxHeight={maxHeight}
-        height={!horizontal ? (onResize ? height : this.state.height) : '100%'}
+        height={
+          !horizontal
+            ? onResize
+              ? height
+              : this.state.height
+            : gutter /*TODO: should use isSandy check*/
+            ? undefined
+            : '100%'
+        }
         resizable={resizable}
-        onResize={this.onResize}>
-        <SidebarContainer position={position} backgroundColor={backgroundColor}>
-          {children}
+        onResize={this.onResize}
+        gutterWidth={gutter ? theme.space.large : undefined}>
+        <SidebarContainer
+          position={position}
+          backgroundColor={backgroundColor}
+          unstyled={gutter}>
+          {gutter ? (
+            <GutterWrapper position={position}>{children}</GutterWrapper>
+          ) : (
+            children
+          )}
         </SidebarContainer>
       </SidebarInteractiveContainer>
     );
   }
 }
+
+const GutterWrapper = ({
+  position,
+  children,
+}: {
+  position: SidebarPosition;
+  children: ReactNode;
+}) => {
+  return position === 'right' ? (
+    <FlexRow grow>
+      <VerticalGutter enabled={!!children} />
+      {children}
+    </FlexRow>
+  ) : (
+    <FlexRow grow>
+      {children}
+      <VerticalGutter enabled={!!children} />
+    </FlexRow>
+  ); // TODO: support top / bottom
+};
+
+const VerticalGutterContainer = styled('div')<{enabled: boolean}>(
+  ({enabled}) => ({
+    width: theme.space.large,
+    minWidth: theme.space.large,
+    height: '100%',
+    cursor: enabled ? undefined : 'default', // hide cursor from interactive container
+    color: enabled ? theme.textColorPlaceholder : theme.backgroundWash,
+    fontSize: '16px',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    background: theme.backgroundWash,
+    ':hover': {
+      background: enabled ? theme.dividerColor : undefined,
+    },
+  }),
+);
+const VerticalGutter = ({enabled}: {enabled: boolean}) => (
+  <VerticalGutterContainer enabled={enabled}>
+    <MoreOutlined />
+  </VerticalGutterContainer>
+);

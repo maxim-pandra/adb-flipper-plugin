@@ -9,12 +9,11 @@
 
 import {Provider} from 'react-redux';
 import ReactDOM from 'react-dom';
-import {useState, useEffect} from 'react';
 
 import ContextMenuProvider from './ui/components/ContextMenuProvider';
 import GK from './fb-stubs/GK';
 import {init as initLogger} from './fb-stubs/Logger';
-import App from './App';
+import App from './fb-stubs/App';
 import setupPrefetcher from './fb-stubs/Prefetcher';
 import {persistStore} from 'redux-persist';
 import {Store} from './reducers/index';
@@ -22,10 +21,6 @@ import dispatcher from './dispatcher/index';
 import TooltipProvider from './ui/components/TooltipProvider';
 import config from './utils/processConfig';
 import {initLauncherHooks} from './utils/launcher';
-import initCrashReporter from './utils/electronCrashReporter';
-import fbConfig from './fb-stubs/config';
-import {isFBEmployee} from './utils/fbEmployee';
-import WarningEmployee from './chrome/WarningEmployee';
 import {setPersistor} from './utils/persistor';
 import React from 'react';
 import path from 'path';
@@ -38,6 +33,8 @@ import os from 'os';
 import QuickPerformanceLogger, {FLIPPER_QPL_EVENTS} from './fb-stubs/QPL';
 import {PopoverProvider} from './ui/components/PopoverProvider';
 import {initializeFlipperLibImplementation} from './utils/flipperLibImplementation';
+import {enableConsoleHook} from './chrome/ConsoleLogs';
+import {sideEffect} from './utils/sideEffect';
 
 if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   // By default Node.JS has its internal certificate storage and doesn't use
@@ -59,42 +56,24 @@ enableMapSet();
 
 GK.init();
 
-const AppFrame = () => {
-  const [warnEmployee, setWarnEmployee] = useState(false);
-  useEffect(() => {
-    if (fbConfig.warnFBEmployees) {
-      isFBEmployee().then((isEmployee) => {
-        setWarnEmployee(isEmployee);
-      });
-    }
-  }, []);
-
-  return (
-    <TooltipProvider>
-      <PopoverProvider>
-        <ContextMenuProvider>
-          <Provider store={store}>
-            <CacheProvider value={cache}>
-              {warnEmployee ? (
-                <WarningEmployee
-                  onClick={() => {
-                    setWarnEmployee(false);
-                  }}
-                />
-              ) : (
-                <App logger={logger} />
-              )}
-            </CacheProvider>
-          </Provider>
-        </ContextMenuProvider>
-      </PopoverProvider>
-    </TooltipProvider>
-  );
-};
+const AppFrame = () => (
+  <TooltipProvider>
+    <PopoverProvider>
+      <ContextMenuProvider>
+        <Provider store={store}>
+          <CacheProvider value={cache}>
+            <App logger={logger} />
+          </CacheProvider>
+        </Provider>
+      </ContextMenuProvider>
+    </PopoverProvider>
+  </TooltipProvider>
+);
 
 function setProcessState(store: Store) {
   const settings = store.getState().settingsState;
   const androidHome = settings.androidHome;
+  const idbPath = settings.idbPath;
 
   if (!process.env.ANDROID_HOME) {
     process.env.ANDROID_HOME = androidHome;
@@ -105,7 +84,9 @@ function setProcessState(store: Store) {
   process.env.PATH =
     ['emulator', 'tools', 'platform-tools']
       .map((directory) => path.resolve(androidHome, directory))
-      .join(':') + `:${process.env.PATH}`;
+      .join(':') +
+    `:${idbPath}` +
+    `:${process.env.PATH}`;
 
   window.requestIdleCallback(() => {
     setupPrefetcher(settings);
@@ -116,10 +97,24 @@ function init() {
   initializeFlipperLibImplementation(store, logger);
   ReactDOM.render(<AppFrame />, document.getElementById('root'));
   initLauncherHooks(config(), store);
-  const sessionId = store.getState().application.sessionId;
-  initCrashReporter(sessionId || '');
   registerRecordingHooks(store);
+  enableConsoleHook();
   window.flipperGlobalStoreDispatch = store.dispatch;
+
+  // listen to settings and load the right theme
+  sideEffect(
+    store,
+    {name: 'loadTheme', fireImmediately: true, throttleMs: 500},
+    (state) =>
+      state.settingsState.enableSandy && state.settingsState.darkMode
+        ? 'themes/dark'
+        : 'themes/light',
+    (theme) => {
+      (document.getElementById(
+        'flipper-theme-import',
+      ) as HTMLLinkElement).href = `${theme}.css`;
+    },
+  );
 }
 
 // rehydrate app state before exposing init

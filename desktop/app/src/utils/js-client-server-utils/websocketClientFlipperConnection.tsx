@@ -18,7 +18,7 @@ export class WebsocketClientFlipperConnection<M>
   connStatusSubscribers: Set<ISubscriber<ConnectionStatus>> = new Set();
   connStatus: ConnectionStatus;
   app: string;
-  plugins: string[] = [];
+  plugins: string[] | undefined = undefined;
 
   constructor(ws: WebSocket, app: string, plugins: string[]) {
     this.websocket = ws;
@@ -59,24 +59,37 @@ export class WebsocketClientFlipperConnection<M>
     );
   }
 
-  // TODO: fully implement and return actual result
   requestResponse(payload: Payload<string, M>): Single<Payload<string, M>> {
     return new Single((subscriber) => {
-      const method =
-        payload.data != null ? JSON.parse(payload.data).method : 'not-defined';
+      const {id: callId = undefined, method = undefined} =
+        payload.data != null ? JSON.parse(payload.data) : {};
+
       subscriber.onSubscribe(() => {});
-      if (method != 'getPlugins') {
-        this.fireAndForget(payload);
+
+      if (method === 'getPlugins' && this.plugins != null) {
+        subscriber.onComplete({
+          data: JSON.stringify({
+            success: {plugins: this.plugins},
+          }),
+        });
+        return;
       }
-      subscriber.onComplete(
-        method == 'getPlugins'
-          ? {
-              data: JSON.stringify({
-                success: {plugins: this.plugins},
-              }),
-            }
-          : {data: JSON.stringify({success: null})},
+
+      this.websocket.send(
+        JSON.stringify({
+          type: 'call',
+          app: this.app,
+          payload: payload.data != null ? payload.data : {},
+        }),
       );
+
+      this.websocket.on('message', (message: string) => {
+        const {app, payload} = JSON.parse(message);
+
+        if (app === this.app && payload?.id === callId) {
+          subscriber.onComplete({data: JSON.stringify(payload)});
+        }
+      });
     });
   }
 }

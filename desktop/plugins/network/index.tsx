@@ -37,16 +37,22 @@ import {
   Route,
   ResponseFollowupChunk,
   PersistedState,
+  Header,
 } from './types';
 import {convertRequestToCurlCommand, getHeaderValue, decodeBody} from './utils';
 import RequestDetails from './RequestDetails';
 import {clipboard} from 'electron';
 import {URL} from 'url';
-import {DefaultKeyboardAction} from 'app/src/MenuBar';
 import {MockResponseDialog} from './MockResponseDialog';
 import {combineBase64Chunks} from './chunks';
+import {DefaultKeyboardAction} from 'flipper-plugin';
 
 const LOCALSTORAGE_MOCK_ROUTE_LIST_KEY = '__NETWORK_CACHED_MOCK_ROUTE_LIST';
+
+export const BodyOptions = {
+  formatted: 'formatted',
+  parsed: 'parsed',
+};
 
 type State = {
   selectedIds: Array<RequestId>;
@@ -55,6 +61,10 @@ type State = {
   nextRouteId: number;
   isMockResponseSupported: boolean;
   showMockResponseDialog: boolean;
+  detailBodyFormat: string;
+  highlightedRows: Set<string> | null | undefined;
+  requests: {[id: string]: Request};
+  responses: {[id: string]: Response};
 };
 
 const COLUMN_SIZE = {
@@ -116,11 +126,21 @@ export interface NetworkRouteManager {
   addRoute(): void;
   modifyRoute(id: string, routeChange: Partial<Route>): void;
   removeRoute(id: string): void;
+  copyHighlightedCalls(
+    highlightedRows: Set<string>,
+    requests: {[id: string]: Request},
+    responses: {[id: string]: Response},
+  ): void;
 }
 const nullNetworkRouteManager: NetworkRouteManager = {
   addRoute() {},
   modifyRoute(_id: string, _routeChange: Partial<Route>) {},
   removeRoute(_id: string) {},
+  copyHighlightedCalls(
+    _highlightedRows: Set<string>,
+    _requests: {[id: string]: Request},
+    _responses: {[id: string]: Response},
+  ) {},
 };
 export const NetworkRouteContext = createContext<NetworkRouteManager>(
   nullNetworkRouteManager,
@@ -321,6 +341,10 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
       nextRouteId: 0,
       isMockResponseSupported: false,
       showMockResponseDialog: false,
+      detailBodyFormat: BodyOptions.parsed,
+      highlightedRows: new Set(),
+      requests: {},
+      responses: {},
     };
   }
 
@@ -335,6 +359,7 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
         showMockResponseDialog: false,
         nextRouteId: Object.keys(routes).length,
       });
+      informClientMockChange(routes);
     });
 
     this.setState(this.parseDeepLinkPayload(this.props.deepLinkPayload));
@@ -378,6 +403,41 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
             informClientMockChange(draftState.routes);
           }),
         );
+      },
+      copyHighlightedCalls(
+        highlightedRows: Set<string> | null | undefined,
+        requests: {[id: string]: Request},
+        responses: {[id: string]: Response},
+      ) {
+        setState((state) => {
+          const nextState = produce(state, (state: State) => {
+            // iterate through highlighted rows
+            highlightedRows?.forEach((row) => {
+              const response = responses[row];
+              // convert headers
+              const headers: {[id: string]: Header} = {};
+              response.headers.forEach((e) => {
+                headers[e.key] = e;
+              });
+
+              // convert data
+              const responseData =
+                response && response.data ? decodeBody(response) : null;
+
+              const nextRouteId = state.nextRouteId;
+              state.routes[nextRouteId.toString()] = {
+                requestUrl: requests[row].url,
+                requestMethod: requests[row].method,
+                responseData: responseData as string,
+                responseHeaders: headers,
+                responseStatus: responses[row].status.toString(),
+              };
+              state.nextRouteId = nextRouteId + 1;
+            });
+          });
+          informClientMockChange(nextState.routes);
+          return nextState;
+        });
       },
     };
   }
@@ -486,9 +546,13 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
     this.setState({showMockResponseDialog: false});
   };
 
+  onSelectFormat = (bodyFormat: string) => {
+    this.setState({detailBodyFormat: bodyFormat});
+  };
+
   renderSidebar = () => {
     const {requests, responses} = this.props.persistedState;
-    const {selectedIds} = this.state;
+    const {selectedIds, detailBodyFormat} = this.state;
     const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
 
     if (!selectedId) {
@@ -503,6 +567,8 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
         key={selectedId}
         request={requestWithId}
         response={responses[selectedId]}
+        bodyFormat={detailBodyFormat}
+        onSelectFormat={this.onSelectFormat}
       />
     );
   };
@@ -559,6 +625,9 @@ type NetworkTableProps = {
 type NetworkTableState = {
   sortedRows: TableRows;
   routes: {[id: string]: Route};
+  highlightedRows: Set<string> | null | undefined;
+  requests: {[id: string]: Request};
+  responses: {[id: string]: Response};
 };
 
 function formatTimestamp(timestamp: number): string {
@@ -585,44 +654,53 @@ function buildRow(
   if (request.url == null) {
     return null;
   }
-  const url = new URL(request.url);
-  const domain = url.host + url.pathname;
+  let url: URL | undefined = undefined;
+  try {
+    url = new URL(request.url);
+  } catch (e) {
+    console.warn(`Failed to parse url: '${request.url}'`, e);
+  }
+  const domain = url ? url.host + url.pathname : '<unknown>';
   const friendlyName = getHeaderValue(request.headers, 'X-FB-Friendly-Name');
   const style = response && response.isMock ? mockingStyle : undefined;
 
-  let copyText = `# HTTP request for ${domain} (ID: ${request.id})
-## Request
-HTTP ${request.method} ${request.url}
-${request.headers
-  .map(
-    ({key, value}: {key: string; value: string}): string =>
-      `${key}: ${String(value)}`,
-  )
-  .join('\n')}`;
+  const copyText = () => {
+    let copyText = `# HTTP request for ${domain} (ID: ${request.id})
+  ## Request
+  HTTP ${request.method} ${request.url}
+  ${request.headers
+    .map(
+      ({key, value}: {key: string; value: string}): string =>
+        `${key}: ${String(value)}`,
+    )
+    .join('\n')}`;
 
-  const requestData = request.data ? decodeBody(request) : null;
-  const responseData = response && response.data ? decodeBody(response) : null;
+    const requestData = request.data ? decodeBody(request) : null;
+    const responseData =
+      response && response.data ? decodeBody(response) : null;
 
-  if (requestData) {
-    copyText += `\n\n${requestData}`;
-  }
+    if (requestData) {
+      copyText += `\n\n${requestData}`;
+    }
 
-  if (response) {
-    copyText += `
+    if (response) {
+      copyText += `
 
-## Response
-HTTP ${response.status} ${response.reason}
-${response.headers
-  .map(
-    ({key, value}: {key: string; value: string}): string =>
-      `${key}: ${String(value)}`,
-  )
-  .join('\n')}`;
-  }
+  ## Response
+  HTTP ${response.status} ${response.reason}
+  ${response.headers
+    .map(
+      ({key, value}: {key: string; value: string}): string =>
+        `${key}: ${String(value)}`,
+    )
+    .join('\n')}`;
+    }
 
-  if (responseData) {
-    copyText += `\n\n${responseData}`;
-  }
+    if (responseData) {
+      copyText += `\n\n${responseData}`;
+    }
+    return copyText;
+  };
 
   return {
     columns: {
@@ -665,10 +743,9 @@ ${response.headers
     filterValue: `${request.method} ${request.url}`,
     sortKey: request.timestamp,
     copyText,
+    getSearchContent: copyText,
     highlightOnHover: true,
     style: style,
-    requestBody: requestData,
-    responseBody: responseData,
   };
 }
 
@@ -726,6 +803,9 @@ function calculateState(
   return {
     sortedRows: rows,
     routes: nextProps.routes,
+    highlightedRows: nextProps.highlightedRows,
+    requests: props.requests,
+    responses: props.responses,
   };
 }
 
@@ -796,7 +876,7 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
             highlightedRows={this.props.highlightedRows}
             rowLineHeight={26}
             allowRegexSearch={true}
-            allowBodySearch={true}
+            allowContentSearch={true}
             zebra={false}
             clearSearchTerm={this.props.searchTerm !== ''}
             defaultSearchTerm={this.props.searchTerm}
@@ -819,6 +899,9 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
                   onHide();
                   this.props.onCloseButtonPressed();
                 }}
+                highlightedRows={this.state.highlightedRows}
+                requests={this.state.requests}
+                responses={this.state.responses}
               />
             )}
           </Sheet>

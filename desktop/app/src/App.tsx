@@ -12,7 +12,6 @@ import {FlexRow, styled, Layout} from 'flipper';
 import {connect} from 'react-redux';
 import TitleBar from './chrome/TitleBar';
 import MainSidebar2 from './chrome/mainsidebar/MainSidebar2';
-import ErrorBar from './chrome/ErrorBar';
 import DoctorBar from './chrome/DoctorBar';
 import ShareSheetExportUrl from './chrome/ShareSheetExportUrl';
 import SignInSheet from './chrome/SignInSheet';
@@ -40,7 +39,7 @@ import {
 } from './reducers/application';
 import {Logger} from './fb-interfaces/Logger';
 import {State as Store} from './reducers/index';
-import {StaticView, FlipperError} from './reducers/connections';
+import {StaticView} from './reducers/connections';
 import PluginManager from './chrome/plugin-manager/PluginManager';
 import StatusBar from './chrome/StatusBar';
 import SettingsSheet from './chrome/SettingsSheet';
@@ -59,7 +58,6 @@ type OwnProps = {
 
 type StateFromProps = {
   leftSidebarVisible: boolean;
-  errors: FlipperError[];
   activeSheet: ActiveSheet;
   share: ShareType | null;
   staticView: StaticView;
@@ -81,37 +79,36 @@ const PluginContent = styled(FlexRow)({
 PluginContent.displayName = 'App:PluginContent';
 type Props = StateFromProps & OwnProps & DispatchProps;
 
+export function registerStartupTime(logger: Logger) {
+  // track time since launch
+  const [s, ns] = process.hrtime();
+  const launchEndTime = s * 1e3 + ns / 1e6;
+  ipcRenderer.on('getLaunchTime', (_: any, launchStartTime: number) => {
+    logger.track('performance', 'launchTime', launchEndTime - launchStartTime);
+
+    QuickPerformanceLogger.markerPoint(
+      FLIPPER_QPL_EVENTS.STARTUP,
+      'launchStartTime',
+      undefined,
+      0,
+      launchStartTime,
+    );
+
+    QuickPerformanceLogger.markerEnd(
+      FLIPPER_QPL_EVENTS.STARTUP,
+      QuickLogActionType.SUCCESS,
+      0,
+      launchEndTime,
+    );
+  });
+
+  ipcRenderer.send('getLaunchTime');
+  ipcRenderer.send('componentDidMount');
+}
+
 export class App extends React.Component<Props> {
   componentDidMount() {
-    // track time since launch
-    const [s, ns] = process.hrtime();
-    const launchEndTime = s * 1e3 + ns / 1e6;
-    ipcRenderer.on('getLaunchTime', (_: any, launchStartTime: number) => {
-      this.props.logger.track(
-        'performance',
-        'launchTime',
-        launchEndTime - launchStartTime,
-      );
-
-      QuickPerformanceLogger.markerPoint(
-        FLIPPER_QPL_EVENTS.STARTUP,
-        'launchStartTime',
-        undefined,
-        0,
-        launchStartTime,
-      );
-
-      QuickPerformanceLogger.markerEnd(
-        FLIPPER_QPL_EVENTS.STARTUP,
-        QuickLogActionType.SUCCESS,
-        0,
-        launchEndTime,
-      );
-    });
-
-    ipcRenderer.send('getLaunchTime');
-    ipcRenderer.send('componentDidMount');
-
+    registerStartupTime(this.props.logger);
     if (hasNewChangesToShow(window.localStorage)) {
       this.props.setActiveSheet(ACTIVE_SHEET_CHANGELOG_RECENT_ONLY);
     }
@@ -174,7 +171,6 @@ export class App extends React.Component<Props> {
           <>
             <TitleBar version={version} />
             <DoctorBar />
-            <ErrorBar />
           </>
           <>
             <Sheet>{this.getSheet}</Sheet>
@@ -214,12 +210,11 @@ export class App extends React.Component<Props> {
 export default connect<StateFromProps, DispatchProps, OwnProps, Store>(
   ({
     application: {leftSidebarVisible, activeSheet, share},
-    connections: {errors, staticView},
+    connections: {staticView},
   }) => ({
     leftSidebarVisible,
     activeSheet,
     share: share,
-    errors,
     staticView,
   }),
   {

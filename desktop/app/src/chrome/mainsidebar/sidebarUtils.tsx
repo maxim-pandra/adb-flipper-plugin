@@ -85,6 +85,7 @@ const PluginShape = styled(FlexBox)<{
 
 export const PluginName = styled(Text)<{isActive?: boolean; count?: number}>(
   (props) => ({
+    cursor: 'default',
     minWidth: 0,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -165,7 +166,12 @@ export const PluginSidebarListItem: React.FC<{
         backgroundColor={starred === false ? colors.light20 : iconColor}
         color={colors.white}
       />
-      <PluginName>{getPluginTitle(plugin)}</PluginName>
+      <PluginName
+        title={`${getPluginTitle(plugin)} ${plugin.version} ${
+          plugin.details?.description ? '- ' + plugin.details?.description : ''
+        }`}>
+        {getPluginTitle(plugin)}
+      </PluginName>
       {starred !== undefined && (!starred || isActive) && (
         <ToggleButton
           onClick={onFavorite}
