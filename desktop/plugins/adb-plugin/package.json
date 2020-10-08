@@ -13,7 +13,7 @@
   "title": "ADB Plugin",
   "scripts": {
     "lint": "flipper-pkg lint",
-    "prepack": "flipper-pkg lint && flipper-pkg bundle"
+    "prepack": "yarn flipper-pkg lint && yarn flipper-pkg bundle"
   },
   "peerDependencies": {
     "flipper": "latest"

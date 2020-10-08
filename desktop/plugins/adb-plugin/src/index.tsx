@@ -100,7 +100,7 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
     render() {
         return (
             <Container>
-                <Heading level={1}>Meat ADB Flipper</Heading>
+                <Heading level={1}>Meet ADB Flipper</Heading>
                 <NameForm value={this.state.inputText} handleChange={this.handleChange} handleSubmit={this.handleSubmit}/>
                 <MyView>
                     <Text>{`AppId: ${this.state.applicationId}`}</Text>
