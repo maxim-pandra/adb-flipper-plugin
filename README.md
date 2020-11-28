@@ -15,4 +15,4 @@ To start the plugin you have to do the following:
 All contributions are welcome.
 Problems to solve can be found in issues section.
 
-![ADB-plugin for Flipper](/website/static/img/adbplugin.png)
+![ADB-plugin for Flipper](https://i.ibb.co/VS7ThyB/Screen-Shot-2020-11-28-at-18-08-21.png)
