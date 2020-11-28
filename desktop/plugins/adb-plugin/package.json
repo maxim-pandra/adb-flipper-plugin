@@ -2,7 +2,8 @@
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-adb-plugin",
   "id": "adb-plugin",
-  "version": "1.0.0",
+  "version": "1.0.2",
+  "description": "ADB helper for Flipper",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "src/index.tsx",
   "license": "MIT",
@@ -22,8 +23,13 @@
     "flipper": "latest",
     "flipper-pkg": "latest"
   },
+  "homepage": "https://github.com/maxim-pandra/adb-flipper-plugin#readme",
   "bugs": {
     "email": "turaevmaxim@gmail.com",
+    "url": "https://github.com/maxim-pandra/adb-flipper-plugin"
+  },
+  "repository": {
+    "type": "git",
     "url": "https://github.com/maxim-pandra/adb-flipper-plugin"
   }
 }

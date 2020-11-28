@@ -17,14 +17,18 @@ const PACKAGE_NAME = 'com.facebook.flipper.sample'//change for your package name
 const Container = styled(FlexColumn)({
     alignItems: 'center',
     justifyContent: 'space-around',
-    padding: 20,
-    border: '3px red solid',
+    //border: '3px red solid',
     margin: 130,
+    boxShadow: '0 6px 10px rgba(0,0,0,.08), 0 0 6px rgba(0,0,0,.05)',
+    background: '#fff',
+    borderRadius: '4px',
+    transition: '.3s transform cubic-bezier(.155,1.105,.295,1.12),.3s box-shadow,.3s -webkit-transform cubic-bezier(.155,1.105,.295,1.12)',
+    padding: '14px 80px 18px 36px'
 });
 
 const MyView = styled.div({
     fontSize: 22,
-    color: colors.red
+    color: colors.green
 });
 
 const Status = styled(Text)({
@@ -97,6 +101,10 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
         new UninstallCommand(this.adbBridge, this.state.applicationId).execute();
     }
 
+    revokePermissions = () => {
+        console.log('revoke permissions')
+    }
+
     render() {
         return (
             <Container>
@@ -110,8 +118,9 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
                 <Button style={{width: 200}}  onClick={this.clearDataAndRestart.bind(this)}>Clear App Data and Restart</Button>
                 <Button style={{width: 200}}  onClick={this.uninstallApp.bind(this)}>Uninstall app</Button> 
                 <Button style={{width: 200}}  onClick={this.killApp.bind(this)}>Kill app</Button>
+                {/* <Button style={{width: 200}} onClick={this.revokePermissions.bind(this)}>Revoke permissions</Button> */}
                 <Status>This plugin is open source. All contributions are welcome. <a href='https://github.com/maxim-pandra/adb-flipper-plugin' target="_blank">https://github.com/maxim-pandra/adb-flipper-plugin</a></Status>
             </Container >
         );
-    }
+    }    
 }
