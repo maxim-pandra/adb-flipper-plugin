@@ -7,7 +7,7 @@
  * @format
  */
 
-const {fbContent, fbInternalOnly} = require('internaldocs-fb-helpers');
+const {fbInternalOnly, fbContent} = require('internaldocs-fb-helpers');
 
 module.exports = {
   features: {
@@ -25,18 +25,59 @@ module.exports = {
       'features/crash-reporter-plugin',
       'features/share-flipper-data',
       'features/react-native',
+      ...fbInternalOnly([
+        'fb/Memory-Tools',
+        'fb/supporting-feed-inspector',
+        'fb/sections',
+        'fb/Trace',
+        'fb/mobile-config',
+        'fb/plugins',
+      ]),
     ],
   },
   setup: {
     'Getting Started': [
-      ...fbInternalOnly(['getting-started/fb/using-flipper-at-facebook']),
       'getting-started/index',
-      'getting-started/android-native',
-      'getting-started/ios-native',
-      'getting-started/react-native',
-      'getting-started/react-native-android',
-      'getting-started/react-native-ios',
+      {
+        'Adding Flipper to your app': [
+          ...fbContent({
+            external: [
+              'getting-started/android-native',
+              'getting-started/ios-native',
+            ],
+            internal: [
+              {
+                Android: [
+                  'fb/Add-flipper-to-android-app',
+                  'getting-started/android-native',
+                ],
+                iOS: [
+                  'fb/Adding-flipper-to-ios-app',
+                  'getting-started/ios-native',
+                ],
+              },
+            ],
+          }),
+          {
+            'React Native': [
+              'getting-started/react-native',
+              'getting-started/react-native-android',
+              'getting-started/react-native-ios',
+            ],
+          },
+        ],
+      },
+      ...fbInternalOnly([
+        'getting-started/fb/connecting-to-flipper',
+      ]),
       'troubleshooting',
+      {
+        'Other Platforms': [
+          'extending/new-clients',
+          'extending/establishing-a-connection',
+          'extending/supporting-layout',
+        ],
+      },
     ],
     'Plugin Setup': [
       'setup/layout-plugin',
@@ -52,7 +93,6 @@ module.exports = {
     Advanced: ['custom-ports', 'stetho'],
   },
   extending: {
-    'Extending Flipper': ['extending/index'],
     Tutorial: [
       'tutorial/intro',
       'tutorial/ios',
@@ -63,94 +103,63 @@ module.exports = {
       'tutorial/js-custom',
       'tutorial/js-publishing',
     ],
-    // start-internal-sidebars-example
-    'Plugin Development': [
-      'extending/js-setup',
-      'extending/js-plugin-api',
-      'extending/create-table-plugin',
-      'extending/ui-components',
-      'extending/styling-components',
-      'extending/search-and-filter',
-      'extending/create-plugin',
-      'extending/client-plugin-lifecycle',
-      'extending/send-data',
-      'extending/error-handling',
+    'Development workflow': [
+      'extending/dev-setup',
+      'extending/loading-custom-plugins',
+      'extending/desktop-plugin-structure',
       'extending/testing',
       'extending/debugging',
+      ...fbInternalOnly(['fb/adding-analytics-0']),
+      'extending/plugin-distribution',
+    ],
+    'Desktop plugin APIs': [
+      'extending/flipper-plugin',
+      'extending/styling-components',
+      'extending/create-table-plugin',
+      'extending/search-and-filter',
       ...fbInternalOnly([
-        'extending/fb/desktop-plugin-releases',
-        // TODO: Remove once sandy is public T69061061
-        'extending/fb/sandy/sandy-plugins',
-        'extending/fb/sandy/flipper-plugin',
+        {
+          'QPL linting': ['fb/building-a-linter', 'fb/active-linters'],
+        },
       ]),
+      {
+        'Deprecated APIs': [
+          'extending/ui-components',
+          'extending/js-plugin-api',
+        ],
+      },
     ],
-    // end-internal-sidebars-example
-    'Other Platforms': [
-      'extending/new-clients',
-      'extending/establishing-a-connection',
-      'extending/supporting-layout',
-    ],
-    Internals: [
+    'Client plugin APIs': [
+      'extending/create-plugin',
+      'extending/error-handling',
       'extending/arch',
+      'extending/client-plugin-lifecycle',
       'extending/layout-inspector',
-      'extending/testing-rn',
-      ...fbInternalOnly(['extending/fb/launcher']),
     ],
   },
-  'fb-internal': {
-    'FB Internal': fbInternalOnly([
-      'fb/troubleshooting',
-      'fb/Add-flipper-to-android-app',
-      'fb/Adding-flipper-to-ios-app',
-      'fb/LauncherConfig',
-      'fb/Flipper-fbsource-Pinning',
-      'fb/Flipper-Release-Cycle',
-      'fb/Flipper-Strict-TypeScript',
-      'fb/Help-Updating-Flipper',
-      {
-        'Internal Plugins': [
-          'fb/plugins',
-          {
-            Layout: [
-              'fb/layout-extending-android-layout-inspector',
-              'fb/layout-extending-ios-layout-inspector',
-            ],
-          },
-          'fb/Memory-Tools',
-          'fb/Navigation-Plugin',
-          'fb/supporting-feed-inspector',
-          'fb/sections',
-          'fb/Trace',
-          'fb/mobile-config',
-        ],
-      },
-      {
-        'Plugin Development': [
-          'fb/create-new-plugin',
-          'fb/developmentworkflow',
-          'fb/TypeScript',
-          'fb/using-gatekeepers',
-          'fb/adding-npm-dependencies-0',
-          'fb/adding-analytics-0',
-          {
-            Android: [
-              'fb/android-plugin-development-Android-interacting-0',
-              'fb/android-plugin-development-testing-android-plugins-0',
-            ],
-          },
-          {
-            iOS: [
-              'fb/ios-plugin-development-sending-data-to-an-ios-plugin-0',
-              'fb/ios-plugin-development-testing-ios-plugins-0',
-            ],
-          },
-          'fb/Add-Support-Group-to-Flipper-Support-Form',
-        ],
-      },
-      {
-        Lints: ['fb/building-a-linter', 'fb/active-linters'],
-      },
-      'fb/index',
-    ]),
+  internals: {
+    Internals: [
+      'internals/index',
+      'extending/public-releases',
+      'extending/testing-rn',
+      ...fbInternalOnly([
+        'fb/release-infra',
+        'fb/LauncherConfig',
+        'fb/hacking-on-launcher',
+        'fb/Flipper-fbsource-Pinning',
+        'fb/Flipper-Release-Cycle',
+        'fb/Add-Support-Group-to-Flipper-Support-Form',
+        'fb/Alerts',
+        'fb/bundling',
+        'fb/Certificate-Exchange-Diagram',
+        'fb/Electron-Upgrade',
+        'fb/flipper-analytics',
+        'fb/Navigation-Plugin-Development-Guide',
+        'fb/Oncall-Runbook',
+        'fb/sandcastle',
+        'fb/Star-Ratings',
+        'fb/sandcastle-overview',
+      ]),
+    ],
   },
 };

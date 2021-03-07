@@ -1,18 +1,22 @@
 {
   "accessibility": [
-    16
+    16,
+    20
   ],
   "app-dailies": [
     12
   ],
   "app-react": [
-    12
+    12,
+    16
   ],
   "apps": [
-    12
+    12,
+    16
   ],
   "arrow-right": [
-    12
+    12,
+    16
   ],
   "bell-null-outline": [
     24
@@ -24,22 +28,27 @@
     12
   ],
   "bird": [
-    12
+    12,
+    16
   ],
   "borders": [
     16
   ],
   "box": [
-    12
+    12,
+    24
   ],
   "brush-paint": [
-    12
+    12,
+    16
   ],
   "bug": [
-    12
+    12,
+    20
   ],
   "building-city": [
-    12
+    12,
+    16
   ],
   "camcorder": [
     12,
@@ -57,6 +66,7 @@
   "caution-triangle": [
     12,
     16,
+    20,
     24
   ],
   "caution": [
@@ -107,16 +117,19 @@
     24
   ],
   "dashboard": [
-    12
+    12,
+    16
   ],
   "data-table": [
+    12,
     16
   ],
   "desktop": [
     12
   ],
   "directions": [
-    12
+    12,
+    16
   ],
   "dots-3-circle-outline": [
     16
@@ -131,7 +144,8 @@
     12
   ],
   "flash-default": [
-    12
+    12,
+    16
   ],
   "info-circle": [
     12,
@@ -139,13 +153,15 @@
     24
   ],
   "internet": [
-    12
+    12,
+    16
   ],
   "life-event-major": [
     16
   ],
   "magic-wand": [
     12,
+    16,
     20
   ],
   "magnifying-glass": [
@@ -154,7 +170,8 @@
     24
   ],
   "messages": [
-    12
+    12,
+    16
   ],
   "minus-circle": [
     12
@@ -168,10 +185,12 @@
     32
   ],
   "network": [
-    12
+    12,
+    16
   ],
   "news-feed": [
-    12
+    12,
+    16
   ],
   "pause": [
     16
@@ -183,7 +202,8 @@
     16
   ],
   "profile": [
-    12
+    12,
+    16
   ],
   "question-circle-outline": [
     16
@@ -201,6 +221,7 @@
   ],
   "rocket": [
     12,
+    16,
     20
   ],
   "settings": [
@@ -237,7 +258,8 @@
     16
   ],
   "thought-bubble": [
-    12
+    12,
+    16
   ],
   "tools": [
     12,
@@ -245,7 +267,8 @@
     20
   ],
   "translate": [
-    12
+    12,
+    16
   ],
   "trash-outline": [
     16
@@ -255,10 +278,12 @@
     16
   ],
   "tree": [
-    12
+    12,
+    16
   ],
   "trending": [
-    12
+    12,
+    16
   ],
   "triangle-down": [
     12,
@@ -269,13 +294,16 @@
     12
   ],
   "underline": [
-    12
+    12,
+    16
   ],
   "washing-machine": [
-    12
+    12,
+    16
   ],
   "watch-tv": [
-    12
+    12,
+    16
   ],
   "gears-two": [
     16
@@ -311,31 +339,37 @@
     16
   ],
   "messenger-code": [
-    12
+    12,
+    16
   ],
   "book": [
     12
   ],
   "list-arrow-up": [
-    12
+    12,
+    16
   ],
   "cat": [
-    12
+    12,
+    16
   ],
   "duplicate": [
-    12
+    12,
+    16
   ],
   "profile-circle-outline": [
     16
   ],
   "card-person": [
-    12
+    12,
+    16
   ],
   "pencil-outline": [
     16
   ],
   "code": [
-    12
+    12,
+    16
   ],
   "undo-outline": [
     16
@@ -361,10 +395,12 @@
     16
   ],
   "paper-stack": [
-    12
+    12,
+    16
   ],
   "weather-cold": [
-    12
+    12,
+    16
   ],
   "mobile-cross": [
     16
@@ -385,13 +421,15 @@
     16
   ],
   "marketplace": [
-    12
+    12,
+    16
   ],
   "workflow": [
     12
   ],
   "sankey-diagram": [
-    12
+    12,
+    16
   ],
   "media-stack": [
     16
@@ -406,14 +444,16 @@
     16
   ],
   "log": [
-    12
+    12,
+    16
   ],
   "triangle-up": [
     16,
     20
   ],
   "checkmark-circle": [
-    12
+    12,
+    20
   ],
   "circle": [
     12
@@ -428,10 +468,12 @@
     16
   ],
   "scuba": [
-    12
+    12,
+    16
   ],
   "line-chart": [
-    12
+    12,
+    16
   ],
   "caution-circle": [
     12
@@ -443,6 +485,102 @@
     16
   ],
   "cup-outline": [
+    24
+  ],
+  "unicorn": [
+    20
+  ],
+  "turtle": [
+    20
+  ],
+  "sushi": [
+    12
+  ],
+  "arrows-up-down": [
+    16
+  ],
+  "style-effects": [
+    16
+  ],
+  "stopwatch": [
+    16
+  ],
+  "database": [
+    16
+  ],
+  "bar-chart": [
+    16
+  ],
+  "augmented-reality": [
+    16
+  ],
+  "app-flash": [
+    16
+  ],
+  "sample-lo": [
+    20
+  ],
+  "point": [
+    20
+  ],
+  "eye": [
+    16
+  ],
+  "send": [
+    16
+  ],
+  "refresh-right": [
+    12,
+    16
+  ],
+  "hourglass": [
+    16
+  ],
+  "mobile-outline": [
+    16,
+    24
+  ],
+  "bookmark-outline": [
+    16
+  ],
+  "app-facebook-f-outline": [
+    24
+  ],
+  "app-messenger-outline": [
+    24
+  ],
+  "app-instagram-outline": [
+    24
+  ],
+  "app-whatsapp-outline": [
+    24
+  ],
+  "app-workplace-outline": [
+    24
+  ],
+  "app-work-chat-outline": [
+    24
+  ],
+  "sample-hi": [
+    20
+  ],
+  "dog": [
+    12,
+    16
+  ],
+  "hub": [
+    16
+  ],
+  "upload": [
+    16
+  ],
+  "list-gear-outline": [
+    24
+  ],
+  "app-apple-outline": [
+    24
+  ],
+  "app-microsoft-windows": [
     24
   ]
 }

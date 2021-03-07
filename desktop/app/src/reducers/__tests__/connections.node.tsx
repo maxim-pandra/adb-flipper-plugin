@@ -13,6 +13,7 @@ import BaseDevice from '../../devices/BaseDevice';
 import MacDevice from '../../devices/MacDevice';
 import {FlipperDevicePlugin} from '../../plugin';
 import MetroDevice from '../../devices/MetroDevice';
+import {TestUtils} from 'flipper-plugin';
 
 test('doing a double REGISTER_DEVICE keeps the last', () => {
   const device1 = new BaseDevice('serial', 'physical', 'title', 'Android');
@@ -41,17 +42,8 @@ test('register, remove, re-register a metro device works correctly', () => {
   expect(state.devices.length).toBe(1);
   expect(state.devices[0].displayTitle()).toBe('React Native');
 
-  const archived = device1.archive();
-  state = reducer(state, {
-    type: 'UNREGISTER_DEVICES',
-    payload: new Set([device1.serial]),
-  });
-  expect(state.devices.length).toBe(0);
+  device1.disconnect();
 
-  state = reducer(state, {
-    type: 'REGISTER_DEVICE',
-    payload: archived,
-  });
   expect(state.devices.length).toBe(1);
   expect(state.devices[0].displayTitle()).toBe('React Native (Offline)');
 
@@ -61,6 +53,7 @@ test('register, remove, re-register a metro device works correctly', () => {
   });
   expect(state.devices.length).toBe(1);
   expect(state.devices[0].displayTitle()).toBe('React Native');
+  expect(state.devices[0]).not.toBe(device1);
 });
 
 test('triggering REGISTER_DEVICE before REGISTER_PLUGINS still registers device plugins', () => {
@@ -69,6 +62,10 @@ test('triggering REGISTER_DEVICE before REGISTER_PLUGINS still registers device 
     static supportsDevice() {
       return true;
     }
+    static details = TestUtils.createMockPluginDetails({
+      id: 'test',
+      pluginType: 'device',
+    });
   }
 
   const stateWithDevice = reducer(undefined, {

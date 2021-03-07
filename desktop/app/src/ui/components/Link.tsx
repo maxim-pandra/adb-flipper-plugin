@@ -7,22 +7,10 @@
  * @format
  */
 
-import styled from '@emotion/styled';
-import {colors} from './colors';
 import {useCallback} from 'react';
 import {shell} from 'electron';
 import React from 'react';
-import {useIsSandy} from '../../sandy-chrome/SandyContext';
 import {Typography} from 'antd';
-
-const StyledLink = styled.span({
-  color: colors.highlight,
-  '&:hover': {
-    cursor: 'pointer',
-    textDecoration: 'underline',
-  },
-});
-StyledLink.displayName = 'Link:StyledLink';
 
 const AntOriginalLink = Typography.Link;
 
@@ -30,8 +18,8 @@ export default function Link(props: {
   href: string;
   children?: React.ReactNode;
   style?: React.CSSProperties;
+  onClick?: ((event: React.MouseEvent<any>) => void) | undefined;
 }) {
-  const isSandy = useIsSandy();
   const onClick = useCallback(
     (e: React.MouseEvent<any>) => {
       shell.openExternal(props.href);
@@ -41,13 +29,7 @@ export default function Link(props: {
     [props.href],
   );
 
-  return isSandy ? (
-    <AntOriginalLink {...props} onClick={onClick} />
-  ) : (
-    <StyledLink onClick={onClick} style={props.style}>
-      {props.children || props.href}
-    </StyledLink>
-  );
+  return <AntOriginalLink {...props} onClick={props.onClick ?? onClick} />;
 }
 
 // XXX. For consistent usage, we monkey patch AntDesign's Link component,

@@ -8,7 +8,6 @@
  */
 
 import React from 'react';
-import {createStore} from 'redux';
 import {Provider} from 'react-redux';
 import {
   render,
@@ -16,38 +15,39 @@ import {
   act as testingLibAct,
 } from '@testing-library/react';
 import {queries} from '@testing-library/dom';
-import {TestUtils} from 'flipper-plugin';
 
 import {
   selectPlugin,
-  starPlugin,
   selectDevice,
   selectClient,
 } from '../reducers/connections';
 import BaseDevice from '../devices/BaseDevice';
 
-import {rootReducer} from '../store';
 import {Store} from '../reducers/index';
 import Client, {ClientQuery} from '../Client';
 
-import {buildClientId} from '../utils/clientUtils';
 import {Logger} from '../fb-interfaces/Logger';
 import {PluginDefinition} from '../plugin';
-import {registerPlugins} from '../reducers/plugins';
 import PluginContainer from '../PluginContainer';
 import {getPluginKey, isDevicePluginDefinition} from '../utils/pluginUtils';
-import {getInstance} from '../fb-stubs/Logger';
-import {setFlipperLibImplementation} from '../utils/flipperLibImplementation';
+import MockFlipper from './MockFlipper';
+import {switchPlugin} from '../reducers/pluginManager';
 
-type MockFlipperResult = {
+export type MockFlipperResult = {
   client: Client;
   device: BaseDevice;
   store: Store;
   pluginKey: string;
   sendMessage(method: string, params: any, client?: Client): void;
   createDevice(serial: string): BaseDevice;
-  createClient(device: BaseDevice, name: string): Promise<Client>;
+  createClient(
+    device: BaseDevice,
+    name: string,
+    query?: ClientQuery,
+    skipRegister?: boolean,
+  ): Promise<Client>;
   logger: Logger;
+  togglePlugin(plugin?: string): void;
 };
 
 type MockOptions = Partial<{
@@ -55,118 +55,77 @@ type MockOptions = Partial<{
    * can be used to intercept outgoing calls. If it returns undefined
    * the base implementation will be used
    */
-  onSend(pluginId: string, method: string, params?: object): any;
+  onSend?: (pluginId: string, method: string, params?: object) => any;
+  additionalPlugins?: PluginDefinition[];
+  dontEnableAdditionalPlugins?: true;
+  asBackgroundPlugin?: true;
+  supportedPlugins?: string[];
 }>;
+
+function isPluginEnabled(
+  store: Store,
+  pluginClazz: PluginDefinition,
+  selectedApp: string,
+) {
+  return (
+    (!isDevicePluginDefinition(pluginClazz) &&
+      store
+        .getState()
+        .connections.enabledPlugins[selectedApp]?.includes(pluginClazz.id)) ||
+    (isDevicePluginDefinition(pluginClazz) &&
+      store.getState().connections.enabledDevicePlugins.has(pluginClazz.id))
+  );
+}
 
 export async function createMockFlipperWithPlugin(
   pluginClazz: PluginDefinition,
   options?: MockOptions,
 ): Promise<MockFlipperResult> {
-  const store = createStore(rootReducer);
-  const logger = getInstance();
-  setFlipperLibImplementation(TestUtils.createMockFlipperLib());
+  const mockFlipper = new MockFlipper();
+  await mockFlipper.init({
+    plugins: [pluginClazz, ...(options?.additionalPlugins ?? [])],
+  });
+  const logger = mockFlipper.logger;
+  const store = mockFlipper.store;
 
-  store.dispatch(registerPlugins([pluginClazz]));
-
-  function createDevice(serial: string): BaseDevice {
-    const device = new BaseDevice(
-      serial,
-      'physical',
-      'MockAndroidDevice',
-      'Android',
-    );
-    store.dispatch({
-      type: 'REGISTER_DEVICE',
-      payload: device,
-    });
-    device.loadDevicePlugins(store.getState().plugins.devicePlugins);
-    return device;
-  }
-
-  async function createClient(
+  const createDevice = (serial: string) => mockFlipper.createDevice({serial});
+  const createClient = async (
     device: BaseDevice,
     name: string,
-  ): Promise<Client> {
-    const query: ClientQuery = {
-      app: name,
-      os: 'Android',
-      device: device.title,
-      device_id: device.serial,
-      sdk_version: 4,
-    };
-    const id = buildClientId({
-      app: query.app,
-      os: query.os,
-      device: query.device,
-      device_id: query.device_id,
-    });
-
-    const client = new Client(
-      id,
+    query?: ClientQuery,
+    skipRegister?: boolean,
+  ) => {
+    const client = await mockFlipper.createClient(device, {
+      name,
       query,
-      null, // create a stub connection to avoid this plugin to be archived?
-      logger,
-      store,
-      isDevicePluginDefinition(pluginClazz) ? [] : [pluginClazz.id],
-      device,
-    );
-
-    // yikes
-    client.device = {
-      then() {
-        return device;
-      },
-    } as any;
-    client.rawCall = async (
-      method: string,
-      _fromPlugin: boolean,
-      params: any,
-    ): Promise<any> => {
-      const intercepted = options?.onSend?.(method, params);
-      if (intercepted !== undefined) {
-        return intercepted;
-      }
-      switch (method) {
-        case 'getPlugins':
-          // assuming this plugin supports all plugins for now
-          return {
-            plugins: [...store.getState().plugins.clientPlugins.keys()],
-          };
-        case 'getBackgroundPlugins':
-          return {plugins: []};
-        default:
-          throw new Error(
-            `Test client doesn't support rawCall method '${method}'`,
-          );
-      }
-    };
-    client.rawSend = jest.fn();
-
+      skipRegister,
+      onSend: options?.onSend,
+      supportedPlugins: options?.supportedPlugins,
+      backgroundPlugins: options?.asBackgroundPlugin ? [pluginClazz.id] : [],
+    });
     // enable the plugin
-    if (
-      !isDevicePluginDefinition(pluginClazz) &&
-      !store
-        .getState()
-        .connections.userStarredPlugins[client.query.app]?.includes(
-          pluginClazz.id,
-        )
-    ) {
+    if (!isPluginEnabled(store, pluginClazz, name)) {
       store.dispatch(
-        starPlugin({
+        switchPlugin({
           plugin: pluginClazz,
           selectedApp: client.query.app,
         }),
       );
     }
-    await client.init();
-
-    // As convenience, by default we select the new client, star the plugin, and select it
-    store.dispatch({
-      type: 'NEW_CLIENT',
-      payload: client,
-    });
+    if (!options?.dontEnableAdditionalPlugins) {
+      options?.additionalPlugins?.forEach((plugin) => {
+        if (!isPluginEnabled(store, plugin, name)) {
+          store.dispatch(
+            switchPlugin({
+              plugin,
+              selectedApp: client.query.app,
+            }),
+          );
+        }
+      });
+    }
     return client;
-  }
+  };
 
   const device = createDevice('serial');
   const client = await createClient(device, 'TestApp');
@@ -203,6 +162,20 @@ export async function createMockFlipperWithPlugin(
     createClient,
     logger,
     pluginKey: getPluginKey(client.id, device, pluginClazz.id),
+    togglePlugin(id?: string) {
+      const plugin = id
+        ? store.getState().plugins.clientPlugins.get(id)
+        : pluginClazz;
+      if (!plugin) {
+        throw new Error('unknown plugin ' + id);
+      }
+      store.dispatch(
+        switchPlugin({
+          plugin,
+          selectedApp: client.query.app,
+        }),
+      );
+    },
   };
 }
 

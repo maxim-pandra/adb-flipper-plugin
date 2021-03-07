@@ -20,15 +20,24 @@ import {
 import {FlipperPlugin, FlipperDevicePlugin} from '../../plugin';
 import {Notification} from '../../plugin';
 import {default as Client, ClientExport} from '../../Client';
-import {State as PluginsState} from '../../reducers/plugins';
-import {renderMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
+import {selectedPlugins, State as PluginsState} from '../../reducers/plugins';
+import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
 import {
   TestUtils,
-  SandyPluginDefinition,
+  _SandyPluginDefinition,
   createState,
   PluginClient,
+  DevicePluginClient,
+  sleep,
 } from 'flipper-plugin';
 import {selectPlugin} from '../../reducers/connections';
+import {TestIdler} from '../Idler';
+
+const testIdler = new TestIdler();
+
+function testOnStatusMessage() {
+  // emtpy stub
+}
 
 class TestPlugin extends FlipperPlugin<any, any, any> {}
 TestPlugin.title = 'TestPlugin';
@@ -99,7 +108,6 @@ test('test generateClientIndentifierWithSalt helper function', () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const identifier = generateClientIdentifier(device, 'app');
@@ -114,7 +122,6 @@ test('test generateClientFromClientWithSalt helper function', () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const client = generateClientFromDevice(device, 'app');
@@ -145,7 +152,6 @@ test('test generateClientFromDevice helper function', () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const client = generateClientFromDevice(device, 'app');
@@ -166,7 +172,6 @@ test('test generateClientIdentifier helper function', () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const identifier = generateClientIdentifier(device, 'app');
@@ -209,7 +214,6 @@ test('test processStore function for an iOS device connected', async () => {
       deviceType: 'emulator',
       title: 'TestiPhone',
       os: 'iOS',
-      logEntries: [],
       screenshotHandle: null,
     }),
     pluginStates: {},
@@ -245,7 +249,6 @@ test('test processStore function for an iOS device connected with client plugin 
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const client = generateClientFromDevice(device, 'testapp');
@@ -296,7 +299,6 @@ test('test processStore function to have only the client for the selected device
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const unselectedDevice = new ArchivedDevice({
@@ -304,7 +306,6 @@ test('test processStore function to have only the client for the selected device
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
 
@@ -365,7 +366,6 @@ test('test processStore function to have multiple clients for the selected devic
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
 
@@ -432,7 +432,6 @@ test('test processStore function for device plugin state and no clients', async 
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const json = await processStore({
@@ -470,7 +469,6 @@ test('test processStore function for unselected device plugin state and no clien
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const json = await processStore({
@@ -504,7 +502,6 @@ test('test processStore function for notifications for selected device', async (
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const client = generateClientFromDevice(selectedDevice, 'testapp1');
@@ -554,7 +551,6 @@ test('test processStore function for notifications for unselected device', async
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const unselectedDevice = new ArchivedDevice({
@@ -562,7 +558,6 @@ test('test processStore function for notifications for unselected device', async
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
 
@@ -610,7 +605,6 @@ test('test processStore function for selected plugins', async () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
 
@@ -661,7 +655,6 @@ test('test processStore function for no selected plugins', async () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const client = generateClientFromDevice(selectedDevice, 'app');
@@ -726,6 +719,7 @@ test('test determinePluginsToProcess for mutilple clients having plugins present
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const client2 = new Client(
     generateClientIdentifier(device1, 'app2'),
@@ -739,6 +733,7 @@ test('test determinePluginsToProcess for mutilple clients having plugins present
     logger,
     mockStore,
     ['TestDevicePlugin'],
+    device1,
   );
   const client3 = new Client(
     generateClientIdentifier(device1, 'app3'),
@@ -752,6 +747,7 @@ test('test determinePluginsToProcess for mutilple clients having plugins present
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const plugins: PluginsState = {
     clientPlugins: new Map([
@@ -759,10 +755,19 @@ test('test determinePluginsToProcess for mutilple clients having plugins present
       ['RandomPlugin', TestPlugin],
     ]),
     devicePlugins: new Map([['TestDevicePlugin', TestDevicePlugin]]),
+    loadedPlugins: new Map([
+      ['TestPlugin', TestPlugin.details],
+      ['RandomPlugin', TestPlugin.details],
+      ['TestDevicePlugin', TestDevicePlugin.details],
+    ]),
+    bundledPlugins: new Map(),
     gatekeepedPlugins: [],
     disabledPlugins: [],
     failedPlugins: [],
     selectedPlugins: ['TestPlugin'],
+    marketplacePlugins: [],
+    installedPlugins: new Map(),
+    uninstalledPlugins: new Set(),
   };
   const op = determinePluginsToProcess(
     [client1, client2, client3],
@@ -802,6 +807,7 @@ test('test determinePluginsToProcess for no selected plugin present in any clien
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const client2 = new Client(
     generateClientIdentifier(device1, 'app2'),
@@ -815,6 +821,7 @@ test('test determinePluginsToProcess for no selected plugin present in any clien
     logger,
     mockStore,
     ['TestDevicePlugin'],
+    device1,
   );
   const plugins: PluginsState = {
     clientPlugins: new Map([
@@ -822,10 +829,19 @@ test('test determinePluginsToProcess for no selected plugin present in any clien
       ['RandomPlugin', TestPlugin],
     ]),
     devicePlugins: new Map([['TestDevicePlugin', TestDevicePlugin]]),
+    loadedPlugins: new Map([
+      ['TestPlugin', TestPlugin.details],
+      ['RandomPlugin', TestPlugin.details],
+      ['TestDevicePlugin', TestDevicePlugin.details],
+    ]),
+    bundledPlugins: new Map(),
     gatekeepedPlugins: [],
     disabledPlugins: [],
     failedPlugins: [],
     selectedPlugins: ['RandomPlugin'],
+    marketplacePlugins: [],
+    installedPlugins: new Map(),
+    uninstalledPlugins: new Set(),
   };
   const op = determinePluginsToProcess([client1, client2], device1, plugins);
   expect(op).toBeDefined();
@@ -846,6 +862,7 @@ test('test determinePluginsToProcess for multiple clients on same device', async
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const client2 = new Client(
     generateClientIdentifier(device1, 'app2'),
@@ -859,14 +876,23 @@ test('test determinePluginsToProcess for multiple clients on same device', async
     logger,
     mockStore,
     ['TestDevicePlugin'],
+    device1,
   );
   const plugins: PluginsState = {
     clientPlugins: new Map([['TestPlugin', TestPlugin]]),
     devicePlugins: new Map([['TestDevicePlugin', TestDevicePlugin]]),
+    loadedPlugins: new Map([
+      ['TestPlugin', TestPlugin.details],
+      ['TestDevicePlugin', TestDevicePlugin.details],
+    ]),
+    bundledPlugins: new Map(),
     gatekeepedPlugins: [],
     disabledPlugins: [],
     failedPlugins: [],
     selectedPlugins: ['TestPlugin'],
+    marketplacePlugins: [],
+    installedPlugins: new Map(),
+    uninstalledPlugins: new Set(),
   };
   const op = determinePluginsToProcess([client1, client2], device1, plugins);
   expect(op).toBeDefined();
@@ -897,6 +923,7 @@ test('test determinePluginsToProcess for multiple clients on different device', 
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const client2Device1 = new Client(
     generateClientIdentifier(device1, 'app2'),
@@ -910,6 +937,7 @@ test('test determinePluginsToProcess for multiple clients on different device', 
     logger,
     mockStore,
     ['TestDevicePlugin'],
+    device1,
   );
   const client1Device2 = new Client(
     generateClientIdentifier(device2, 'app'),
@@ -923,6 +951,7 @@ test('test determinePluginsToProcess for multiple clients on different device', 
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    device1,
   );
   const client2Device2 = new Client(
     generateClientIdentifier(device2, 'app2'),
@@ -936,14 +965,23 @@ test('test determinePluginsToProcess for multiple clients on different device', 
     logger,
     mockStore,
     ['TestDevicePlugin'],
+    device1,
   );
   const plugins: PluginsState = {
     clientPlugins: new Map([['TestPlugin', TestPlugin]]),
     devicePlugins: new Map([['TestDevicePlugin', TestDevicePlugin]]),
+    loadedPlugins: new Map([
+      ['TestPlugin', TestPlugin.details],
+      ['TestDevicePlugin', TestDevicePlugin.details],
+    ]),
+    bundledPlugins: new Map(),
     gatekeepedPlugins: [],
     disabledPlugins: [],
     failedPlugins: [],
     selectedPlugins: ['TestPlugin'],
+    marketplacePlugins: [],
+    installedPlugins: new Map(),
+    uninstalledPlugins: new Set(),
   };
   const op = determinePluginsToProcess(
     [client1Device1, client2Device1, client1Device2, client2Device2],
@@ -975,7 +1013,6 @@ test('test determinePluginsToProcess to ignore archived clients', async () => {
     deviceType: 'emulator',
     title: 'TestiPhone',
     os: 'iOS',
-    logEntries: [],
     screenshotHandle: null,
   });
   const logger = {
@@ -999,6 +1036,7 @@ test('test determinePluginsToProcess to ignore archived clients', async () => {
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    archivedDevice,
   );
   const archivedClient = new Client(
     generateClientIdentifier(archivedDevice, 'app'),
@@ -1012,14 +1050,23 @@ test('test determinePluginsToProcess to ignore archived clients', async () => {
     logger,
     mockStore,
     ['TestPlugin', 'TestDevicePlugin'],
+    archivedDevice,
   );
   const plugins: PluginsState = {
     clientPlugins: new Map([['TestPlugin', TestPlugin]]),
     devicePlugins: new Map([['TestDevicePlugin', TestDevicePlugin]]),
+    loadedPlugins: new Map([
+      ['TestPlugin', TestPlugin.details],
+      ['TestDevicePlugin', TestDevicePlugin.details],
+    ]),
+    bundledPlugins: new Map(),
     gatekeepedPlugins: [],
     disabledPlugins: [],
     failedPlugins: [],
     selectedPlugins: ['TestPlugin'],
+    marketplacePlugins: [],
+    installedPlugins: new Map(),
+    uninstalledPlugins: new Set(),
   };
   const op = determinePluginsToProcess(
     [client, archivedClient],
@@ -1039,7 +1086,7 @@ test('test determinePluginsToProcess to ignore archived clients', async () => {
   ]);
 });
 
-const sandyTestPlugin = new SandyPluginDefinition(
+const sandyTestPlugin = new _SandyPluginDefinition(
   TestUtils.createMockPluginDetails(),
   {
     plugin(
@@ -1057,7 +1104,21 @@ const sandyTestPlugin = new SandyPluginDefinition(
           draft.testCount -= 1;
         });
       });
-      return {};
+      return {
+        counter,
+        enableCustomExport() {
+          client.onExport(async (idler, onStatus) => {
+            if (idler.shouldIdle()) {
+              await idler.idle();
+            }
+            await sleep(100);
+            onStatus('hi');
+            return {
+              customExport: true,
+            };
+          });
+        },
+      };
     },
     Component() {
       return null;
@@ -1066,7 +1127,110 @@ const sandyTestPlugin = new SandyPluginDefinition(
 );
 
 test('Sandy plugins are exported properly', async () => {
-  const {client, sendMessage, store} = await renderMockFlipperWithPlugin(
+  const {
+    client,
+    sendMessage,
+    store,
+    device,
+  } = await createMockFlipperWithPlugin(sandyTestPlugin);
+
+  // We do select another plugin, to verify that pending message queues are indeed processed before exporting
+  store.dispatch(
+    selectPlugin({
+      selectedPlugin: 'DeviceLogs',
+      selectedApp: null,
+      selectedDevice: device,
+      deepLinkPayload: null,
+    }),
+  );
+
+  // Deliberately not using 'act' here, to verify that exportStore itself makes sure buffers are flushed first
+  sendMessage('inc', {});
+  sendMessage('inc', {});
+  sendMessage('inc', {});
+
+  // not flushed
+  expect(
+    client.sandyPluginStates.get(sandyTestPlugin.id)!.instanceApi.counter.get(),
+  ).toBe(0);
+
+  const storeExport = await exportStore(store);
+  expect(
+    client.sandyPluginStates.get(sandyTestPlugin.id)!.instanceApi.counter.get(),
+  ).toBe(3);
+
+  const serial = storeExport.exportStoreData.device!.serial;
+  expect(serial).not.toBeFalsy();
+  expect(storeExport.exportStoreData.pluginStates2).toEqual({
+    [`TestApp#Android#MockAndroidDevice#${serial}`]: {
+      TestPlugin: {counter: 3, otherState: {testCount: -3}},
+    },
+  });
+});
+
+test('Non sandy plugins are exported properly if they are still queued', async () => {
+  type State = {
+    counter: number;
+  };
+
+  const {sendMessage, store, device} = await createMockFlipperWithPlugin(
+    class TestPlugin extends FlipperPlugin<any, any, State> {
+      static id = 'TestPlugin';
+
+      static defaultPersistedState: State = {
+        counter: 0,
+      };
+
+      static persistedStateReducer(p: State, method: string): State {
+        if (method === 'inc') {
+          return {
+            counter: p.counter + 1,
+          };
+        }
+        return p;
+      }
+    } as any,
+  );
+
+  // We do select another plugin, to verify that pending message queues are indeed processed before exporting
+  store.dispatch(
+    selectPlugin({
+      selectedPlugin: 'DeviceLogs',
+      selectedApp: null,
+      selectedDevice: device,
+      deepLinkPayload: null,
+    }),
+  );
+
+  // Deliberately not using 'act' here, to verify that exportStore itself makes sure buffers are flushed first
+  sendMessage('inc', {});
+  sendMessage('inc', {});
+  sendMessage('inc', {});
+
+  // not flushed
+  expect(store.getState().pluginStates).toMatchInlineSnapshot(`Object {}`);
+
+  const storeExport = await exportStore(store);
+  // flushed
+  expect(store.getState().pluginStates).toMatchInlineSnapshot(`
+    Object {
+      "TestApp#Android#MockAndroidDevice#serial#TestPlugin": Object {
+        "counter": 3,
+      },
+    }
+  `);
+
+  const serial = storeExport.exportStoreData.device!.serial;
+  expect(serial).not.toBeFalsy();
+  expect(storeExport.exportStoreData.store.pluginStates).toMatchInlineSnapshot(`
+    Object {
+      "TestApp#Android#MockAndroidDevice#${serial}#TestPlugin": "{\\"counter\\":3}",
+    }
+  `);
+});
+
+test('Sandy plugins with custom export are exported properly', async () => {
+  const {client, sendMessage, store} = await createMockFlipperWithPlugin(
     sandyTestPlugin,
   );
 
@@ -1079,6 +1243,10 @@ test('Sandy plugins are exported properly', async () => {
     }),
   );
 
+  client.sandyPluginStates
+    .get(sandyTestPlugin.id)
+    ?.instanceApi.enableCustomExport();
+
   // Deliberately not using 'act' here, to verify that exportStore itself makes sure buffers are flushed first
   sendMessage('inc', {});
   sendMessage('inc', {});
@@ -1089,7 +1257,7 @@ test('Sandy plugins are exported properly', async () => {
   expect(serial).not.toBeFalsy();
   expect(storeExport.exportStoreData.pluginStates2).toEqual({
     [`TestApp#Android#MockAndroidDevice#${serial}`]: {
-      TestPlugin: {counter: 3, otherState: {testCount: -3}},
+      TestPlugin: {customExport: true},
     },
   });
 });
@@ -1135,7 +1303,7 @@ test('Sandy plugins are imported properly', async () => {
     },
   };
 
-  const {client, store} = await renderMockFlipperWithPlugin(sandyTestPlugin);
+  const {client, store} = await createMockFlipperWithPlugin(sandyTestPlugin);
 
   await importDataToStore('unittest.json', JSON.stringify(data), store);
 
@@ -1144,7 +1312,7 @@ test('Sandy plugins are imported properly', async () => {
   expect(client2).not.toBe(client);
   expect(client2.plugins).toEqual([TestPlugin.id]);
 
-  expect(client.sandyPluginStates.get(TestPlugin.id)!.exportState())
+  expect(client.sandyPluginStates.get(TestPlugin.id)!.exportStateSync())
     .toMatchInlineSnapshot(`
     Object {
       "counter": 0,
@@ -1153,7 +1321,7 @@ test('Sandy plugins are imported properly', async () => {
       },
     }
   `);
-  expect(client2.sandyPluginStates.get(TestPlugin.id)!.exportState())
+  expect(client2.sandyPluginStates.get(TestPlugin.id)!.exportStateSync())
     .toMatchInlineSnapshot(`
     Object {
       "counter": 3,
@@ -1162,4 +1330,404 @@ test('Sandy plugins are imported properly', async () => {
       },
     }
   `);
+});
+
+const sandyDeviceTestPlugin = new _SandyPluginDefinition(
+  TestUtils.createMockPluginDetails({pluginType: 'device'}),
+  {
+    supportsDevice: () => true,
+    devicePlugin(client: DevicePluginClient) {
+      const counter = createState(0, {persist: 'counter'});
+      const _somethingElse = createState(0);
+      const anotherState = createState({testCount: 0}, {persist: 'otherState'});
+
+      client.device.onLogEntry(() => {
+        counter.set(counter.get() + 1);
+        anotherState.update((draft) => {
+          draft.testCount -= 1;
+        });
+      });
+      return {
+        counter,
+        enableCustomExport() {
+          client.onExport(async (idler, onStatus) => {
+            if (idler.shouldIdle()) {
+              await idler.idle();
+            }
+            onStatus('hi');
+            await sleep(100);
+            return {
+              customExport: true,
+            };
+          });
+        },
+      };
+    },
+    Component() {
+      return null;
+    },
+  },
+);
+
+test('Sandy device plugins are exported / imported properly', async () => {
+  const data = {
+    clients: [],
+    device: {
+      deviceType: 'archivedPhysical',
+      logs: [],
+      os: 'Android',
+      serial: '2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial',
+      title: 'MockAndroidDevice',
+      pluginStates: {
+        [sandyDeviceTestPlugin.id]: {
+          otherState: {
+            testCount: -3,
+          },
+          counter: 3,
+        },
+      },
+    },
+    deviceScreenshot: null,
+    fileVersion: '0.9.99',
+    flipperReleaseRevision: undefined,
+    pluginStates2: {},
+    store: {
+      activeNotifications: [],
+      pluginStates: {},
+    },
+  };
+
+  const {device, store} = await createMockFlipperWithPlugin(
+    sandyDeviceTestPlugin,
+  );
+
+  await importDataToStore('unittest.json', JSON.stringify(data), store);
+
+  const device2 = store.getState().connections.devices[1];
+  expect(device2).not.toBeFalsy();
+  expect(device2).not.toBe(device);
+  expect(device2.devicePlugins).toEqual([sandyDeviceTestPlugin.id]);
+
+  const {counter} = device2.sandyPluginStates.get(
+    sandyDeviceTestPlugin.id,
+  )?.instanceApi;
+  counter.set(counter.get() + 1);
+
+  expect(
+    (
+      await device.exportState(testIdler, testOnStatusMessage, [
+        sandyDeviceTestPlugin.id,
+      ])
+    )[sandyDeviceTestPlugin.id],
+  ).toMatchInlineSnapshot(`
+    Object {
+      "counter": 0,
+      "otherState": Object {
+        "testCount": 0,
+      },
+    }
+  `);
+  expect(
+    await device2.exportState(testIdler, testOnStatusMessage, [
+      sandyDeviceTestPlugin.id,
+    ]),
+  ).toMatchInlineSnapshot(`
+    Object {
+      "TestPlugin": Object {
+        "counter": 4,
+        "otherState": Object {
+          "testCount": -3,
+        },
+      },
+    }
+  `);
+});
+
+test('Sandy device plugins with custom export are export properly', async () => {
+  const {device, store} = await createMockFlipperWithPlugin(
+    sandyDeviceTestPlugin,
+  );
+
+  device.sandyPluginStates
+    .get(sandyDeviceTestPlugin.id)
+    ?.instanceApi.enableCustomExport();
+
+  store.dispatch(selectedPlugins([sandyDeviceTestPlugin.id]));
+  const storeExport = await exportStore(store);
+  expect(storeExport.exportStoreData.device!.pluginStates).toEqual({
+    [sandyDeviceTestPlugin.id]: {customExport: true},
+  });
+});
+
+test('Sandy plugin with custom import', async () => {
+  const plugin = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails(),
+    {
+      plugin(client: PluginClient) {
+        const counter = createState(0);
+        client.onImport((data) => {
+          counter.set(data.count);
+        });
+
+        return {
+          counter,
+        };
+      },
+      Component() {
+        return null;
+      },
+    },
+  );
+
+  const {store} = await createMockFlipperWithPlugin(plugin);
+
+  const data = {
+    clients: [
+      {
+        id:
+          'TestApp#Android#MockAndroidDevice#2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial',
+        query: {
+          app: 'TestApp',
+          device: 'MockAndroidDevice',
+          device_id: '2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial',
+          os: 'Android',
+          sdk_version: 4,
+        },
+      },
+    ],
+    device: {
+      deviceType: 'physical',
+      logs: [],
+      os: 'Android',
+      serial: '2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial',
+      title: 'MockAndroidDevice',
+    },
+    deviceScreenshot: null,
+    fileVersion: '0.9.99',
+    flipperReleaseRevision: undefined,
+    pluginStates2: {
+      'TestApp#Android#MockAndroidDevice#2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial': {
+        [plugin.id]: {
+          count: 4,
+        },
+      },
+    },
+    store: {
+      activeNotifications: [],
+      pluginStates: {},
+    },
+  };
+
+  await importDataToStore('unittest.json', JSON.stringify(data), store);
+
+  expect(
+    store
+      .getState()
+      .connections.clients[0].sandyPluginStates.get(plugin.id)
+      ?.instanceApi.counter.get(),
+  ).toBe(0);
+  expect(
+    store
+      .getState()
+      .connections.clients[1].sandyPluginStates.get(plugin.id)
+      ?.instanceApi.counter.get(),
+  ).toBe(4);
+});
+
+test('Sandy device plugin with custom import', async () => {
+  const plugin = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails({pluginType: 'device'}),
+    {
+      supportsDevice: () => true,
+      devicePlugin(client: DevicePluginClient) {
+        const counter = createState(0);
+        client.onImport((data) => {
+          counter.set(data.count);
+        });
+
+        return {
+          counter,
+        };
+      },
+      Component() {
+        return null;
+      },
+    },
+  );
+
+  const data = {
+    clients: [],
+    device: {
+      deviceType: 'archivedPhysical',
+      logs: [],
+      os: 'Android',
+      serial: '2e52cea6-94b0-4ea1-b9a8-c9135ede14ca-serial',
+      title: 'MockAndroidDevice',
+      pluginStates: {
+        [plugin.id]: {
+          count: 2,
+        },
+      },
+    },
+    deviceScreenshot: null,
+    fileVersion: '0.9.99',
+    flipperReleaseRevision: undefined,
+    pluginStates2: {},
+    store: {
+      activeNotifications: [],
+      pluginStates: {},
+    },
+  };
+
+  const {store} = await createMockFlipperWithPlugin(plugin);
+
+  await importDataToStore('unittest.json', JSON.stringify(data), store);
+
+  expect(
+    store
+      .getState()
+      .connections.devices[0].sandyPluginStates.get(plugin.id)
+      ?.instanceApi.counter.get(),
+  ).toBe(0);
+  expect(
+    store
+      .getState()
+      .connections.devices[1].sandyPluginStates.get(plugin.id)
+      ?.instanceApi.counter.get(),
+  ).toBe(2);
+});
+
+test('Sandy plugins with complex data are imported  / exported correctly', async () => {
+  const plugin = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails(),
+    {
+      plugin() {
+        const m = createState(new Map([['a', 1]]), {persist: 'map'});
+        const s = createState(new Set([{x: 2}]), {persist: 'set'});
+        const d = createState(new Date(1611913002865), {persist: 'date'});
+        return {
+          m,
+          s,
+          d,
+        };
+      },
+      Component() {
+        return null;
+      },
+    },
+  );
+
+  const {store, client} = await createMockFlipperWithPlugin(plugin);
+
+  client.disconnect(); // lets make sure we can still export disconnected clients
+  const data = await exportStore(store);
+  expect(Object.values(data.exportStoreData.pluginStates2)).toMatchObject([
+    {
+      TestPlugin: {
+        date: {
+          __flipper_object_type__: 'Date',
+          // no data asserted, since that is TZ sensitve
+        },
+        map: {
+          __flipper_object_type__: 'Map',
+          data: [['a', 1]],
+        },
+        set: {
+          __flipper_object_type__: 'Set',
+          data: [
+            {
+              x: 2,
+            },
+          ],
+        },
+      },
+    },
+  ]);
+
+  await importDataToStore('unittest.json', data.serializedString, store);
+  const api = store
+    .getState()
+    .connections.clients[1].sandyPluginStates.get(plugin.id)?.instanceApi;
+  expect(api.m.get()).toMatchInlineSnapshot(`
+    Map {
+      "a" => 1,
+    }
+  `);
+  expect(api.s.get()).toMatchInlineSnapshot(`
+    Set {
+      Object {
+        "x": 2,
+      },
+    }
+  `);
+  expect(api.d.get()).toEqual(new Date(1611913002865));
+});
+
+test('Sandy device plugins with complex data are imported  / exported correctly', async () => {
+  const deviceplugin = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails({
+      id: 'deviceplugin',
+      pluginType: 'device',
+    }),
+    {
+      supportsDevice() {
+        return true;
+      },
+      devicePlugin() {
+        const m = createState(new Map([['a', 1]]), {persist: 'map'});
+        const s = createState(new Set([{x: 2}]), {persist: 'set'});
+        const d = createState(new Date(1611913002865), {persist: 'date'});
+        return {
+          m,
+          s,
+          d,
+        };
+      },
+      Component() {
+        return null;
+      },
+    },
+  );
+
+  const {store} = await createMockFlipperWithPlugin(deviceplugin);
+  store.dispatch(selectedPlugins([deviceplugin.id]));
+
+  const data = await exportStore(store);
+  expect(data.exportStoreData.device?.pluginStates).toMatchObject({
+    deviceplugin: {
+      date: {
+        __flipper_object_type__: 'Date',
+        // no data asserted, since that is TZ sensitve
+      },
+      map: {
+        __flipper_object_type__: 'Map',
+        data: [['a', 1]],
+      },
+      set: {
+        __flipper_object_type__: 'Set',
+        data: [
+          {
+            x: 2,
+          },
+        ],
+      },
+    },
+  });
+  await importDataToStore('unittest.json', data.serializedString, store);
+  const api = store
+    .getState()
+    .connections.devices[1].sandyPluginStates.get(deviceplugin.id)?.instanceApi;
+  expect(api.m.get()).toMatchInlineSnapshot(`
+    Map {
+      "a" => 1,
+    }
+  `);
+  expect(api.s.get()).toMatchInlineSnapshot(`
+    Set {
+      Object {
+        "x": 2,
+      },
+    }
+  `);
+  expect(api.d.get()).toEqual(new Date(1611913002865));
 });

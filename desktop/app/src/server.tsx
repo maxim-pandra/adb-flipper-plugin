@@ -13,7 +13,7 @@ import {
 } from './utils/CertificateProvider';
 import {Logger} from './fb-interfaces/Logger';
 import {ClientQuery} from './Client';
-import {Store} from './reducers/index';
+import {Store, State} from './reducers/index';
 import CertificateProvider from './utils/CertificateProvider';
 import {RSocketServer} from 'rsocket-core';
 import RSocketTCPServer from 'rsocket-tcp-server';
@@ -26,6 +26,7 @@ import invariant from 'invariant';
 import tls from 'tls';
 import net, {Socket} from 'net';
 import {Responder, Payload, ReactiveSocket} from 'rsocket-types';
+import constants from './fb-stubs/constants';
 import GK from './fb-stubs/GK';
 import {initJsEmulatorIPC} from './utils/js-client-server-utils/serverUtils';
 import {buildClientId} from './utils/clientUtils';
@@ -38,6 +39,9 @@ import {IncomingMessage} from 'http';
 import ws from 'ws';
 import {initSelfInpector} from './utils/self-inspection/selfInspectionUtils';
 import ClientDevice from './devices/ClientDevice';
+import BaseDevice from './devices/BaseDevice';
+import {sideEffect} from './utils/sideEffect';
+import {destroyDevice} from './reducers/connections';
 
 type ClientInfo = {
   connection: FlipperClientConnection<any, any> | null | undefined;
@@ -155,7 +159,7 @@ class Server extends EventEmitter {
               'server',
             );
             server.emit('listening', port);
-            resolve(rsServer);
+            resolve(rsServer!);
           });
         return transportServer;
       };
@@ -181,10 +185,8 @@ class Server extends EventEmitter {
         req: IncomingMessage;
         secure: boolean;
       }) => {
-        return (
-          info.origin.startsWith('chrome-extension://') ||
-          info.origin.startsWith('localhost:') ||
-          info.origin.startsWith('http://localhost:')
+        return constants.VALID_WEB_SOCKET_REQUEST_ORIGIN_PREFIXES.some(
+          (validPrefix) => info.origin.startsWith(validPrefix),
         );
       },
     });
@@ -204,10 +206,7 @@ class Server extends EventEmitter {
         Object.values(clients).map((p) =>
           p.then((c) => this.removeConnection(c.id)),
         );
-        this.store.dispatch({
-          type: 'UNREGISTER_DEVICES',
-          payload: new Set([deviceId]),
-        });
+        destroyDevice(this.store, this.logger, deviceId);
       };
 
       ws.on('message', (rawMessage: any) => {
@@ -529,7 +528,7 @@ class Server extends EventEmitter {
           );
         })
       : Promise.resolve(query.device_id)
-    ).then((csrId) => {
+    ).then(async (csrId) => {
       query.device_id = csrId;
       query.app = appNameWithUpdateHint(query);
 
@@ -541,7 +540,18 @@ class Server extends EventEmitter {
       });
       console.debug(`Device connected: ${id}`, 'server');
 
-      const client = new Client(id, query, conn, this.logger, this.store);
+      const device =
+        getDeviceBySerial(this.store.getState(), query.device_id) ??
+        (await findDeviceForConnection(this.store, query.app, query.device_id));
+      const client = new Client(
+        id,
+        query,
+        conn,
+        this.logger,
+        this.store,
+        undefined,
+        device,
+      );
 
       const info = {
         client,
@@ -588,7 +598,7 @@ class Server extends EventEmitter {
   removeConnection(id: string) {
     const info = this.connections.get(id);
     if (info) {
-      info.client.close();
+      info.client.disconnect();
       this.connections.delete(id);
       this.emit('clients-change');
       this.emit('removed-client', id);
@@ -625,6 +635,56 @@ class ConnectionTracker {
       );
     }
   }
+}
+
+function getDeviceBySerial(
+  state: State,
+  serial: string,
+): BaseDevice | undefined {
+  return state.connections.devices.find((device) => device.serial === serial);
+}
+
+async function findDeviceForConnection(
+  store: Store,
+  clientId: string,
+  serial: string,
+): Promise<BaseDevice> {
+  let lastSeenDeviceList: BaseDevice[] = [];
+  /* All clients should have a corresponding Device in the store.
+     However, clients can connect before a device is registered, so wait a
+     while for the device to be registered if it isn't already. */
+  return reportPlatformFailures(
+    new Promise<BaseDevice>((resolve, reject) => {
+      let unsubscribe: () => void = () => {};
+
+      const timeout = setTimeout(() => {
+        unsubscribe();
+        const error = `Timed out waiting for device ${serial} for client ${clientId}`;
+        console.error(error);
+        reject(error);
+      }, 15000);
+      unsubscribe = sideEffect(
+        store,
+        {name: 'waitForDevice', throttleMs: 100},
+        (state) => state.connections.devices,
+        (newDeviceList) => {
+          if (newDeviceList === lastSeenDeviceList) {
+            return;
+          }
+          lastSeenDeviceList = newDeviceList;
+          const matchingDevice = newDeviceList.find(
+            (device) => device.serial === serial,
+          );
+          if (matchingDevice) {
+            clearTimeout(timeout);
+            resolve(matchingDevice);
+            unsubscribe();
+          }
+        },
+      );
+    }),
+    'client-setMatchingDevice',
+  );
 }
 
 export default Server;

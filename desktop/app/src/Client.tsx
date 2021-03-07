@@ -14,14 +14,13 @@ import {
   FlipperDevicePlugin,
 } from './plugin';
 import BaseDevice, {OS} from './devices/BaseDevice';
-import {App} from './App';
 import {Logger} from './fb-interfaces/Logger';
 import {Store} from './reducers/index';
 import {setPluginState} from './reducers/pluginStates';
 import {Payload, ConnectionStatus} from 'rsocket-types';
 import {Flowable, Single} from 'rsocket-flowable';
 import {performance} from 'perf_hooks';
-import {reportPlatformFailures, reportPluginFailures} from './utils/metrics';
+import {reportPluginFailures} from './utils/metrics';
 import {notNull} from './utils/typeUtils';
 import {default as isProduction} from './utils/isProduction';
 import {registerPlugins} from './reducers/plugins';
@@ -33,13 +32,15 @@ import {
   defaultEnabledBackgroundPlugins,
 } from './utils/pluginUtils';
 import {processMessagesLater} from './utils/messageQueue';
-import {sideEffect} from './utils/sideEffect';
 import {emitBytesReceived} from './dispatcher/tracking';
 import {debounce} from 'lodash';
 import {batch} from 'react-redux';
-import {SandyPluginInstance} from 'flipper-plugin';
+import {createState, _SandyPluginInstance} from 'flipper-plugin';
 import {flipperMessagesClientPlugin} from './utils/self-inspection/plugins/FlipperMessagesClientPlugin';
 import {getFlipperLibImplementation} from './utils/flipperLibImplementation';
+import {freeze} from 'immer';
+import GK from './fb-stubs/GK';
+import {message} from 'antd';
 
 type Plugins = Array<string>;
 
@@ -123,8 +124,7 @@ export interface FlipperClientConnection<D, M> {
 }
 
 export default class Client extends EventEmitter {
-  app: App | undefined;
-  connected: boolean;
+  connected = createState(false);
   id: string;
   query: ClientQuery;
   sdkVersion: number;
@@ -134,11 +134,15 @@ export default class Client extends EventEmitter {
   connection: FlipperClientConnection<any, any> | null | undefined;
   store: Store;
   activePlugins: Set<string>;
+  freezeData = GK.get('flipper_frozen_data');
+
+  /**
+   * @deprecated
+   * use plugin.deviceSync instead
+   */
   device: Promise<BaseDevice>;
-  _deviceResolve: (device: BaseDevice) => void = (_) => {};
-  _deviceResolved: BaseDevice | undefined;
+  deviceSync: BaseDevice;
   logger: Logger;
-  lastSeenDeviceList: Array<BaseDevice>;
   broadcastCallbacks: Map<string, Map<string, Set<Function>>>;
   messageBuffer: Record<
     string /*pluginKey*/,
@@ -146,11 +150,11 @@ export default class Client extends EventEmitter {
       plugin:
         | typeof FlipperPlugin
         | typeof FlipperDevicePlugin
-        | SandyPluginInstance;
+        | _SandyPluginInstance;
       messages: Params[];
     }
   > = {};
-  sandyPluginStates = new Map<string /*pluginID*/, SandyPluginInstance>();
+  sandyPluginStates = new Map<string /*pluginID*/, _SandyPluginInstance>();
 
   requestCallbacks: Map<
     number,
@@ -168,11 +172,11 @@ export default class Client extends EventEmitter {
     conn: FlipperClientConnection<any, any> | null | undefined,
     logger: Logger,
     store: Store,
-    plugins?: Plugins | null | undefined,
-    device?: BaseDevice,
+    plugins: Plugins | null | undefined,
+    device: BaseDevice,
   ) {
     super();
-    this.connected = true;
+    this.connected.set(true);
     this.plugins = plugins ? plugins : [];
     this.backgroundPlugins = [];
     this.connection = conn;
@@ -185,24 +189,16 @@ export default class Client extends EventEmitter {
     this.broadcastCallbacks = new Map();
     this.requestCallbacks = new Map();
     this.activePlugins = new Set();
-    this.lastSeenDeviceList = [];
 
-    this.device = device
-      ? Promise.resolve(device)
-      : new Promise((resolve, _reject) => {
-          this._deviceResolve = resolve;
-        });
-
-    if (device != null) {
-      this._deviceResolved = device;
-    }
+    this.device = Promise.resolve(device);
+    this.deviceSync = device;
 
     const client = this;
     if (conn) {
       conn.connectionStatus().subscribe({
         onNext(payload) {
           if (payload.kind == 'ERROR' || payload.kind == 'CLOSED') {
-            client.connected = false;
+            client.connected.set(false);
           }
         },
         onSubscribe(subscription) {
@@ -213,58 +209,6 @@ export default class Client extends EventEmitter {
         },
       });
     }
-  }
-
-  /* All clients should have a corresponding Device in the store.
-     However, clients can connect before a device is registered, so wait a
-     while for the device to be registered if it isn't already. */
-  async setMatchingDevice(): Promise<void> {
-    return reportPlatformFailures(
-      new Promise<BaseDevice>((resolve, reject) => {
-        let unsubscribe: () => void = () => {};
-
-        const device = this.store
-          .getState()
-          .connections.devices.find(
-            (device) => device.serial === this.query.device_id,
-          );
-        if (device) {
-          this._deviceResolved = device;
-          resolve(device);
-          return;
-        }
-
-        const timeout = setTimeout(() => {
-          unsubscribe();
-          const error = `Timed out waiting for device for client ${this.id}`;
-          console.error(error);
-          reject(error);
-        }, 5000);
-        unsubscribe = sideEffect(
-          this.store,
-          {name: 'waitForDevice', throttleMs: 100},
-          (state) => state.connections.devices,
-          (newDeviceList) => {
-            if (newDeviceList === this.lastSeenDeviceList) {
-              return;
-            }
-            this.lastSeenDeviceList = newDeviceList;
-            const matchingDevice = newDeviceList.find(
-              (device) => device.serial === this.query.device_id,
-            );
-            if (matchingDevice) {
-              clearTimeout(timeout);
-              resolve(matchingDevice);
-              unsubscribe();
-            }
-          },
-        );
-      }),
-      'client-setMatchingDevice',
-    ).then((device) => {
-      this._deviceResolved = device;
-      this._deviceResolve(device);
-    });
   }
 
   supportsPlugin(pluginId: string): boolean {
@@ -278,7 +222,7 @@ export default class Client extends EventEmitter {
   isEnabledPlugin(pluginId: string) {
     return this.store
       .getState()
-      .connections.userStarredPlugins[this.query.app]?.includes(pluginId);
+      .connections.enabledPlugins[this.query.app]?.includes(pluginId);
   }
 
   shouldConnectAsBackgroundPlugin(pluginId: string) {
@@ -289,7 +233,6 @@ export default class Client extends EventEmitter {
   }
 
   async init() {
-    this.setMatchingDevice();
     await this.loadPlugins();
     // this starts all sandy enabled plugins
     this.plugins.forEach((pluginId) =>
@@ -310,7 +253,7 @@ export default class Client extends EventEmitter {
         // TODO: needs to be wrapped in error tracking T68955280
         this.sandyPluginStates.set(
           plugin.id,
-          new SandyPluginInstance(
+          new _SandyPluginInstance(
             getFlipperLibImplementation(),
             plugin,
             this,
@@ -351,21 +294,24 @@ export default class Client extends EventEmitter {
     plugin: PluginDefinition | undefined,
     isEnabled = plugin ? this.isEnabledPlugin(plugin.id) : false,
   ) {
-    // start a plugin on start if it is a SandyPlugin, which is starred, and doesn't have persisted state yet
+    // start a plugin on start if it is a SandyPlugin, which is enabled, and doesn't have persisted state yet
     if (
       isSandyPlugin(plugin) &&
-      isEnabled &&
+      (isEnabled || defaultEnabledBackgroundPlugins.includes(plugin.id)) &&
       !this.sandyPluginStates.has(plugin.id)
     ) {
       // TODO: needs to be wrapped in error tracking T68955280
       this.sandyPluginStates.set(
         plugin.id,
-        new SandyPluginInstance(getFlipperLibImplementation(), plugin, this),
+        new _SandyPluginInstance(getFlipperLibImplementation(), plugin, this),
       );
     }
   }
 
-  stopPluginIfNeeded(pluginId: string) {
+  stopPluginIfNeeded(pluginId: string, force = false) {
+    if (defaultEnabledBackgroundPlugins.includes(pluginId) && !force) {
+      return;
+    }
     const pluginKey = getPluginKey(
       this.id,
       {serial: this.query.device_id},
@@ -379,9 +325,20 @@ export default class Client extends EventEmitter {
     }
   }
 
-  close() {
+  // connection lost, but Client might live on
+  disconnect() {
+    this.sandyPluginStates.forEach((instance) => {
+      instance.disconnect();
+    });
     this.emit('close');
-    this.plugins.forEach((pluginId) => this.stopPluginIfNeeded(pluginId));
+    this.connected.set(false);
+    this.connection = undefined;
+  }
+
+  // clean up this client
+  destroy() {
+    this.disconnect();
+    this.plugins.forEach((pluginId) => this.stopPluginIfNeeded(pluginId, true));
   }
 
   // gets a plugin by pluginId
@@ -418,7 +375,7 @@ export default class Client extends EventEmitter {
         !newBackgroundPlugins.includes(plugin) &&
         this.store
           .getState()
-          .connections.userStarredPlugins[this.query.app]?.includes(plugin)
+          .connections.enabledPlugins[this.query.app]?.includes(plugin)
       ) {
         this.deinitPlugin(plugin);
       }
@@ -434,20 +391,12 @@ export default class Client extends EventEmitter {
     this.emit('plugins-change');
   }
 
+  /**
+   * @deprecated
+   * use deviceSync.serial
+   */
   async deviceSerial(): Promise<string> {
-    try {
-      const device = await this.device;
-      if (!device) {
-        console.error('Using "" for deviceId device is not ready');
-        return '';
-      }
-      return device.serial;
-    } catch (e) {
-      console.error(
-        'Using "" for deviceId because client has no matching device',
-      );
-      return '';
-    }
+    return this.deviceSync.serial;
   }
 
   onMessage(msg: string) {
@@ -455,111 +404,116 @@ export default class Client extends EventEmitter {
       return;
     }
 
-    let rawData;
-    try {
-      rawData = JSON.parse(msg);
-    } catch (err) {
-      console.error(`Invalid JSON: ${msg}`, 'clientMessage');
-      return;
-    }
-
-    const data: {
-      id?: number;
-      method?: string;
-      params?: Params;
-      success?: Object;
-      error?: ErrorType;
-    } = rawData;
-
-    const {id, method} = data;
-
-    if (
-      data.params?.api != 'flipper-messages' &&
-      flipperMessagesClientPlugin.isConnected()
-    ) {
-      flipperMessagesClientPlugin.newMessage({
-        device: this._deviceResolved?.displayTitle(),
-        app: this.query.app,
-        flipperInternalMethod: method,
-        plugin: data.params?.api,
-        pluginMethod: data.params?.method,
-        payload: data.params?.params,
-        direction: 'toFlipper:message',
-      });
-    }
-
-    if (id == null) {
-      const {error} = data;
-      if (error != null) {
-        console.error(
-          `Error received from device ${
-            method ? `when calling ${method}` : ''
-          }: ${error.message} + \nDevice Stack Trace: ${error.stacktrace}`,
-          'deviceError',
-        );
-        this.device.then((device) => handleError(this.store, device, error));
-      } else if (method === 'refreshPlugins') {
-        this.refreshPlugins();
-      } else if (method === 'execute') {
-        invariant(data.params, 'expected params');
-        const params: Params = data.params;
-        const bytes = msg.length * 2; // string lengths are measured in UTF-16 units (not characters), so 2 bytes per char
-        emitBytesReceived(params.api, bytes);
-
-        const persistingPlugin: PluginDefinition | undefined =
-          this.store.getState().plugins.clientPlugins.get(params.api) ||
-          this.store.getState().plugins.devicePlugins.get(params.api);
-
-        let handled = false; // This is just for analysis
-        if (
-          persistingPlugin &&
-          ((persistingPlugin as any).persistedStateReducer ||
-            // only send messages to enabled sandy plugins
-            this.sandyPluginStates.has(params.api))
-        ) {
-          handled = true;
-          const pluginKey = getPluginKey(
-            this.id,
-            {serial: this.query.device_id},
-            params.api,
-          );
-          if (!this.messageBuffer[pluginKey]) {
-            this.messageBuffer[pluginKey] = {
-              plugin: (this.sandyPluginStates.get(params.api) ??
-                persistingPlugin) as any,
-              messages: [params],
-            };
-          } else {
-            this.messageBuffer[pluginKey].messages.push(params);
-          }
-          this.flushMessageBufferDebounced();
+    batch(() => {
+      let rawData;
+      try {
+        rawData = JSON.parse(msg);
+        if (this.freezeData) {
+          rawData = freeze(rawData, true);
         }
-        const apiCallbacks = this.broadcastCallbacks.get(params.api);
-        if (apiCallbacks) {
-          const methodCallbacks = apiCallbacks.get(params.method);
-          if (methodCallbacks) {
-            for (const callback of methodCallbacks) {
-              handled = true;
-              callback(params.params);
-            }
-          }
-        }
-        if (!handled) {
-          console.warn(`Unhandled message ${params.api}.${params.method}`);
-        }
-      }
-      return; // method === 'execute'
-    }
-
-    if (this.sdkVersion < 1) {
-      const callbacks = this.requestCallbacks.get(id);
-      if (!callbacks) {
+      } catch (err) {
+        console.error(`Invalid JSON: ${msg}`, 'clientMessage');
         return;
       }
-      this.requestCallbacks.delete(id);
-      this.finishTimingRequestResponse(callbacks.metadata);
-      this.onResponse(data, callbacks.resolve, callbacks.reject);
-    }
+
+      const data: {
+        id?: number;
+        method?: string;
+        params?: Params;
+        success?: Object;
+        error?: ErrorType;
+      } = rawData;
+
+      const {id, method} = data;
+
+      if (
+        data.params?.api != 'flipper-messages' &&
+        flipperMessagesClientPlugin.isConnected()
+      ) {
+        flipperMessagesClientPlugin.newMessage({
+          device: this.deviceSync?.displayTitle(),
+          app: this.query.app,
+          flipperInternalMethod: method,
+          plugin: data.params?.api,
+          pluginMethod: data.params?.method,
+          payload: data.params?.params,
+          direction: 'toFlipper:message',
+        });
+      }
+
+      if (id == null) {
+        const {error} = data;
+        if (error != null) {
+          console.error(
+            `Error received from device ${
+              method ? `when calling ${method}` : ''
+            }: ${error.message} + \nDevice Stack Trace: ${error.stacktrace}`,
+            'deviceError',
+          );
+          handleError(this.store, this.deviceSync, error);
+        } else if (method === 'refreshPlugins') {
+          this.refreshPlugins();
+        } else if (method === 'execute') {
+          invariant(data.params, 'expected params');
+          const params: Params = data.params;
+          const bytes = msg.length * 2; // string lengths are measured in UTF-16 units (not characters), so 2 bytes per char
+          emitBytesReceived(params.api, bytes);
+
+          const persistingPlugin: PluginDefinition | undefined =
+            this.store.getState().plugins.clientPlugins.get(params.api) ||
+            this.store.getState().plugins.devicePlugins.get(params.api);
+
+          let handled = false; // This is just for analysis
+          if (
+            persistingPlugin &&
+            ((persistingPlugin as any).persistedStateReducer ||
+              // only send messages to enabled sandy plugins
+              this.sandyPluginStates.has(params.api))
+          ) {
+            handled = true;
+            const pluginKey = getPluginKey(
+              this.id,
+              {serial: this.query.device_id},
+              params.api,
+            );
+            if (!this.messageBuffer[pluginKey]) {
+              this.messageBuffer[pluginKey] = {
+                plugin: (this.sandyPluginStates.get(params.api) ??
+                  persistingPlugin) as any,
+                messages: [params],
+              };
+            } else {
+              this.messageBuffer[pluginKey].messages.push(params);
+            }
+            this.flushMessageBufferDebounced();
+          }
+          const apiCallbacks = this.broadcastCallbacks.get(params.api);
+          if (apiCallbacks) {
+            const methodCallbacks = apiCallbacks.get(params.method);
+            if (methodCallbacks) {
+              for (const callback of methodCallbacks) {
+                handled = true;
+                callback(params.params);
+              }
+            }
+          }
+          if (!handled && !isProduction()) {
+            console.warn(`Unhandled message ${params.api}.${params.method}`);
+          }
+        }
+        return; // method === 'execute'
+      }
+
+      if (this.sdkVersion < 1) {
+        const callbacks = this.requestCallbacks.get(id);
+        if (!callbacks) {
+          return;
+        }
+        this.requestCallbacks.delete(id);
+        this.finishTimingRequestResponse(callbacks.metadata);
+        this.onResponse(data, callbacks.resolve, callbacks.reject);
+      }
+    });
   }
 
   onResponse(
@@ -576,7 +530,7 @@ export default class Client extends EventEmitter {
       reject(data.error);
       const {error} = data;
       if (error) {
-        this.device.then((device) => handleError(this.store, device, error));
+        handleError(this.store, this.deviceSync, error);
       }
     } else {
       // ???
@@ -648,51 +602,59 @@ export default class Client extends EventEmitter {
 
       const mark = this.getPerformanceMark(metadata);
       performance.mark(mark);
+      if (!this.connected.get()) {
+        message.warn({
+          content: 'Not connected',
+          key: 'appnotconnectedwarning',
+          duration: 0.5,
+        });
+        reject(new Error('Not connected to client'));
+        return;
+      }
       if (!fromPlugin || this.isAcceptingMessagesFromPlugin(plugin)) {
-        this.connection &&
-          this.connection
-            .requestResponse({data: JSON.stringify(data)})
-            .subscribe({
-              onComplete: (payload) => {
-                if (!fromPlugin || this.isAcceptingMessagesFromPlugin(plugin)) {
-                  const logEventName = this.getLogEventName(data);
-                  this.logger.trackTimeSince(mark, logEventName);
-                  emitBytesReceived(
-                    plugin || 'unknown',
-                    payload.data.length * 2,
-                  );
-                  const response: {
-                    success?: Object;
-                    error?: ErrorType;
-                  } = JSON.parse(payload.data);
+        this.connection!.requestResponse({
+          data: JSON.stringify(data),
+        }).subscribe({
+          onComplete: (payload) => {
+            if (!fromPlugin || this.isAcceptingMessagesFromPlugin(plugin)) {
+              const logEventName = this.getLogEventName(data);
+              this.logger.trackTimeSince(mark, logEventName);
+              emitBytesReceived(plugin || 'unknown', payload.data.length * 2);
+              const response: {
+                success?: Object;
+                error?: ErrorType;
+              } = JSON.parse(payload.data);
 
-                  this.onResponse(response, resolve, reject);
+              this.onResponse(response, resolve, reject);
 
-                  if (flipperMessagesClientPlugin.isConnected()) {
-                    flipperMessagesClientPlugin.newMessage({
-                      device: this._deviceResolved?.displayTitle(),
-                      app: this.query.app,
-                      flipperInternalMethod: method,
-                      payload: response,
-                      plugin,
-                      pluginMethod: params?.method,
-                      direction: 'toFlipper:response',
-                    });
-                  }
-                }
-              },
-              // Open fresco then layout and you get errors because responses come back after deinit.
-              onError: (e) => {
-                if (this.isAcceptingMessagesFromPlugin(plugin)) {
-                  reject(e);
-                }
-              },
-            });
+              if (flipperMessagesClientPlugin.isConnected()) {
+                flipperMessagesClientPlugin.newMessage({
+                  device: this.deviceSync?.displayTitle(),
+                  app: this.query.app,
+                  flipperInternalMethod: method,
+                  payload: response,
+                  plugin,
+                  pluginMethod: params?.method,
+                  direction: 'toFlipper:response',
+                });
+              }
+            }
+          },
+          onError: (e) => {
+            reject(e);
+          },
+        });
+      } else {
+        reject(
+          new Error(
+            `Cannot send ${method}, client is not accepting messages for plugin ${plugin}`,
+          ),
+        );
       }
 
       if (flipperMessagesClientPlugin.isConnected()) {
         flipperMessagesClientPlugin.newMessage({
-          device: this._deviceResolved?.displayTitle(),
+          device: this.deviceSync?.displayTitle(),
           app: this.query.app,
           flipperInternalMethod: method,
           plugin: params?.api,
@@ -759,7 +721,7 @@ export default class Client extends EventEmitter {
   deinitPlugin(pluginId: string) {
     this.activePlugins.delete(pluginId);
     this.sandyPluginStates.get(pluginId)?.disconnect();
-    if (this.connected) {
+    if (this.connected.get()) {
       this.rawSend('deinit', {plugin: pluginId});
     }
   }
@@ -776,7 +738,7 @@ export default class Client extends EventEmitter {
 
     if (flipperMessagesClientPlugin.isConnected()) {
       flipperMessagesClientPlugin.newMessage({
-        device: this._deviceResolved?.displayTitle(),
+        device: this.deviceSync?.displayTitle(),
         app: this.query.app,
         flipperInternalMethod: method,
         payload: params,

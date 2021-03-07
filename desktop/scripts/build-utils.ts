@@ -14,34 +14,79 @@ import fs from 'fs-extra';
 import {spawn} from 'promisify-child-process';
 import {getWatchFolders} from 'flipper-pkg-lib';
 import getAppWatchFolders from './get-app-watch-folders';
-import {getSourcePlugins, getPluginSourceFolders} from 'flipper-plugin-lib';
+import {
+  getSourcePlugins,
+  getPluginSourceFolders,
+  BundledPluginDetails,
+} from 'flipper-plugin-lib';
 import {
   appDir,
   staticDir,
   defaultPluginsIndexDir,
-  headlessDir,
   babelTransformationsDir,
 } from './paths';
 
+const {version} = require('../package.json');
+
 const dev = process.env.NODE_ENV !== 'production';
+
+// For insiders builds we bundle top 5 popular device plugins,
+// plus top 10 popular "universal" plugins enabled by more than 100 users.
+const hardcodedPlugins = new Set<string>([
+  // Popular device plugins
+  'DeviceLogs',
+  'CrashReporter',
+  'MobileBuilds',
+  'Hermesdebuggerrn',
+  'React',
+  // Popular client plugins
+  'Inspector',
+  'Network',
+  'AnalyticsLogging',
+  'GraphQL',
+  'UIPerf',
+  'MobileConfig',
+  'Databases',
+  'FunnelLogger',
+  'Navigation',
+  'Fresco',
+  'Preferences',
+]);
 
 export function die(err: Error) {
   console.error(err.stack);
   process.exit(1);
 }
 
-export async function generatePluginEntryPoints() {
-  console.log('⚙️  Generating plugin entry points...');
-  const plugins = await getSourcePlugins();
-  for (const plugin of plugins) {
-    plugin.isDefault = true;
-  }
+export async function generatePluginEntryPoints(
+  isInsidersBuild: boolean = false,
+) {
+  console.log(
+    `⚙️  Generating plugin entry points (isInsidersBuild=${isInsidersBuild})...`,
+  );
+  const sourcePlugins = await getSourcePlugins();
+  const bundledPlugins = sourcePlugins
+    // we only include predefined set of plugins into insiders release
+    .filter((p) => !isInsidersBuild || hardcodedPlugins.has(p.id))
+    .map(
+      (p) =>
+        ({
+          ...p,
+          isBundled: true,
+          version: p.version === '0.0.0' ? version : p.version,
+          flipperSDKVersion:
+            p.flipperSDKVersion === '0.0.0' ? version : p.flipperSDKVersion,
+        } as BundledPluginDetails),
+    );
   if (await fs.pathExists(defaultPluginsIndexDir)) {
     await fs.remove(defaultPluginsIndexDir);
   }
   await fs.mkdirp(defaultPluginsIndexDir);
-  await fs.writeJSON(path.join(defaultPluginsIndexDir, 'index.json'), plugins);
-  const pluginRequres = plugins
+  await fs.writeJSON(
+    path.join(defaultPluginsIndexDir, 'index.json'),
+    bundledPlugins,
+  );
+  const pluginRequres = bundledPlugins
     .map((x) => `  '${x.name}': require('${x.name}')`)
     .join(',\n');
   const generatedIndex = `
@@ -104,29 +149,6 @@ async function compile(
       out,
     },
   );
-}
-
-export async function compileHeadless(buildFolder: string) {
-  console.log(`⚙️  Compiling headless bundle...`);
-  const watchFolders = [
-    headlessDir,
-    ...(await getWatchFolders(staticDir)),
-    ...(await getAppWatchFolders()),
-    ...(await getPluginSourceFolders()),
-  ]
-    .filter((value, index, self) => self.indexOf(value) === index)
-    .filter(fs.pathExistsSync);
-  try {
-    await compile(
-      buildFolder,
-      headlessDir,
-      watchFolders,
-      path.join(headlessDir, 'index.tsx'),
-    );
-    console.log('✅  Compiled headless bundle.');
-  } catch (err) {
-    die(err);
-  }
 }
 
 export async function compileRenderer(buildFolder: string) {
@@ -200,12 +222,10 @@ export function buildFolder(): Promise<string> {
     return '';
   });
 }
-export function getVersionNumber() {
+export function getVersionNumber(buildNumber: number) {
   let {version} = require('../package.json');
-  const buildNumber = process.argv.join(' ').match(/--version=(\d+)/);
-  if (buildNumber && buildNumber.length > 0) {
-    version = [...version.split('.').slice(0, 2), buildNumber[1]].join('.');
-  }
+  // Unique build number is passed as --version parameter from Sandcastle
+  version = [...version.split('.').slice(0, 2), buildNumber].join('.');
   return version;
 }
 

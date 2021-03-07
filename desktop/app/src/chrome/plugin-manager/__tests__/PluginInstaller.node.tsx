@@ -14,17 +14,17 @@ import React from 'react';
 import {render, waitForElement} from '@testing-library/react';
 import configureStore from 'redux-mock-store';
 import {Provider} from 'react-redux';
-import type {InstalledPluginDetails} from 'flipper-plugin-lib';
+import type {PluginDetails} from 'flipper-plugin-lib';
 import {getUpdatablePlugins, UpdatablePluginDetails} from 'flipper-plugin-lib';
 import {Store} from '../../../reducers';
 import {mocked} from 'ts-jest/utils';
 
 const getUpdatablePluginsMock = mocked(getUpdatablePlugins);
 
-function getStore(installedPlugins: InstalledPluginDetails[] = []): Store {
+function getStore(installedPlugins: PluginDetails[] = []): Store {
   return configureStore([])({
     application: {sessionId: 'mysession'},
-    pluginManager: {installedPlugins},
+    plugins: {installedPlugins},
   }) as Store;
 }
 
@@ -33,13 +33,15 @@ const samplePluginDetails1: UpdatablePluginDetails = {
   entry: './test/index.js',
   version: '0.1.0',
   specVersion: 2,
+  pluginType: 'client',
   main: 'dist/bundle.js',
   dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample1',
   source: 'src/index.js',
   id: 'Hello',
   title: 'Hello',
   description: 'World?',
-  isDefault: false,
+  isBundled: false,
+  isActivatable: true,
   updateStatus: {
     kind: 'not-installed',
     version: '0.1.0',
@@ -51,13 +53,15 @@ const samplePluginDetails2: UpdatablePluginDetails = {
   entry: './test/index.js',
   version: '0.2.0',
   specVersion: 2,
+  pluginType: 'client',
   main: 'dist/bundle.js',
   dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample2',
   source: 'src/index.js',
   id: 'World',
   title: 'World',
   description: 'Hello?',
-  isDefault: false,
+  isBundled: false,
+  isActivatable: true,
   updateStatus: {
     kind: 'not-installed',
     version: '0.2.0',
@@ -95,9 +99,7 @@ test('load PluginInstaller list with one plugin installed', async () => {
       samplePluginDetails2,
     ]),
   );
-  const store = getStore([
-    {...samplePluginDetails1, installationStatus: 'installed'},
-  ]);
+  const store = getStore([samplePluginDetails1]);
   const component = (
     <Provider store={store}>
       <PluginInstaller

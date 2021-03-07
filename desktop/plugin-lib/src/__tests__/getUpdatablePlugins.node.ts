@@ -7,7 +7,7 @@
  * @format
  */
 
-jest.mock('../getInstalledPlugins');
+jest.mock('../pluginInstaller');
 jest.mock('../getNpmHostedPlugins');
 
 import {getUpdatablePlugins} from '../getUpdatablePlugins';
@@ -15,10 +15,10 @@ import {
   getNpmHostedPlugins,
   NpmPackageDescriptor,
 } from '../getNpmHostedPlugins';
-import type {InstalledPluginDetails} from '../getInstalledPlugins';
-import {getInstalledPlugins} from '../getInstalledPlugins';
+import {getInstalledPlugins} from '../pluginInstaller';
 import {mocked} from 'ts-jest/utils';
 import type {Package} from 'npm-api';
+import {InstalledPluginDetails} from '../PluginDetails';
 
 jest.mock('npm-api', () => {
   return jest.fn().mockImplementation(() => {
@@ -60,28 +60,30 @@ const installedPlugins: InstalledPluginDetails[] = [
     entry: './test/index.js',
     version: '0.1.0',
     specVersion: 2,
+    pluginType: 'client',
     main: 'dist/bundle.js',
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample1',
     source: 'src/index.js',
     id: 'Hello',
     title: 'Hello',
     description: 'World?',
-    isDefault: false,
-    installationStatus: 'installed',
+    isBundled: false,
+    isActivatable: true,
   },
   {
     name: 'flipper-plugin-world',
     entry: './test/index.js',
     version: '0.2.0',
     specVersion: 2,
+    pluginType: 'client',
     main: 'dist/bundle.js',
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample2',
     source: 'src/index.js',
     id: 'World',
     title: 'World',
     description: 'Hello?',
-    isDefault: false,
-    installationStatus: 'pending',
+    isBundled: false,
+    isActivatable: true,
   },
 ];
 

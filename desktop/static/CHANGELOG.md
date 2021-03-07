@@ -1,3 +1,77 @@
+# 0.79.0 (3/3/2021)
+
+ * [D26749214](https://github.com/facebook/flipper/search?q=D26749214&type=Commits) -  Fix a crash when disconnecting metro devices
+
+
+# 0.78.0 (26/2/2021)
+
+ * [D26664846](https://github.com/facebook/flipper/search?q=D26664846&type=Commits) -  fixed possible crash on startup after updating from a previous Flipper version to 0.77.0
+ * [D26690516](https://github.com/facebook/flipper/search?q=D26690516&type=Commits) -  Fixed an issue where device plugins targeting the host device didn't show up without connected clients.
+ * [D26691046](https://github.com/facebook/flipper/search?q=D26691046&type=Commits) -  Flipper will no automatically select any newly connected client
+
+
+# 0.76.0 (18/2/2021)
+
+ * [D26337377](https://github.com/facebook/flipper/search?q=D26337377&type=Commits) -  It is now possible to disable and uninstall device plugins if some of them not required
+ * [D26225203](https://github.com/facebook/flipper/search?q=D26225203&type=Commits) -  Android video is now always captured in 1280x720 / 720x1280 to avoid the issue when video cannot be captured because of unsupported resolution (err=-38)
+
+
+# 0.75.1 (12/2/2021)
+
+ * [D26370235](https://github.com/facebook/flipper/search?q=D26370235&type=Commits) -  Reduce spamminess of iOS connection warnings
+
+
+# 0.75.0 (10/2/2021)
+
+ * [D26249575](https://github.com/facebook/flipper/search?q=D26249575&type=Commits) -  CPU plugin will no longer show up for archived devices
+ * [D26224310](https://github.com/facebook/flipper/search?q=D26224310&type=Commits) -  iOS and Android devices will preserve their state after being disconnected
+ * [D26224677](https://github.com/facebook/flipper/search?q=D26224677&type=Commits) -  Clients will retain their state after being disconnected, until they reconnect again
+ * [D26250894](https://github.com/facebook/flipper/search?q=D26250894&type=Commits) -  It is now possible to create a Flipper trace for disconnected devices and apps
+ * [D26250896](https://github.com/facebook/flipper/search?q=D26250896&type=Commits) -  If a new client connects, Flipper will try to focus on it
+ * [D26250897](https://github.com/facebook/flipper/search?q=D26250897&type=Commits) -  Fixed an issue where data that arrived in the background was not part of the generated Flipper export.
+
+
+# 0.73.0 (28/1/2021)
+
+ * [D26072928](https://github.com/facebook/flipper/search?q=D26072928&type=Commits) -  [Network] Mock routes can now be imported and exported. Thanks @bizzguy!
+
+
+# 0.70.0 (6/1/2021)
+
+ * [D25466557](https://github.com/facebook/flipper/search?q=D25466557&type=Commits) -  [Internal]
+ * [D25497305](https://github.com/facebook/flipper/search?q=D25497305&type=Commits) -  [Internal]
+ * [D25557789](https://github.com/facebook/flipper/search?q=D25557789&type=Commits)
+ * [D25620908](https://github.com/facebook/flipper/search?q=D25620908&type=Commits) -  [Internal]
+ * [D25755812](https://github.com/facebook/flipper/search?q=D25755812&type=Commits) -  Fix issue where React Native plugins didn't show up in the Sandy layout
+
+
+# 0.66.0 (18/11/2020)
+
+ * [D24890375](https://github.com/facebook/flipper/search?q=D24890375&type=Commits) -  [Sandy][Navigation] on Android, the currently active deeplink of the application will now be shown in the sidebar
+ * [D24919363](https://github.com/facebook/flipper/search?q=D24919363&type=Commits) -  Automatically start an iOS simulator to launch a device when none is running yet
+ * [D24950080](https://github.com/facebook/flipper/search?q=D24950080&type=Commits) -  `flipper-pkg init` now uses the new Sandy plugin infrastructure ant Ant.design component system
+
+
+# 0.65.0 (11/11/2020)
+
+ * [D24826802](https://github.com/facebook/flipper/search?q=D24826802&type=Commits) -  [Facebook] Add support form support for Flipper itself
+
+
+# 0.64.0 (28/10/2020)
+
+ * [D24506315](https://github.com/facebook/flipper/search?q=D24506315&type=Commits) -  Upgrade internal React version to v17
+
+
+# 0.63.0 (20/10/2020)
+
+ * [D23403095](https://github.com/facebook/flipper/search?q=D23403095&type=Commits) -  [Network] Non-binary request are not properly utf-8 decoded on both iOS and Android, both when gzipped and when not gzipped
+
+
+# 0.62.0 (12/10/2020)
+
+ * [D24136401](https://github.com/facebook/flipper/search?q=D24136401&type=Commits) -  [iOS][Network] Network plugin now supports iOS 14
+
+
 # 0.60.0 (30/9/2020)
 
  * [D23718455](https://github.com/facebook/flipper/search?q=D23718455&type=Commits) -  [Internal]
@@ -5,7 +79,7 @@
 
 # 0.59.0 (29/9/2020)
 
- * [D23908151](https://github.com/facebook/flipper/search?q=D23908151&type=Commits) - 
+ * [D23908151](https://github.com/facebook/flipper/search?q=D23908151&type=Commits) -
  * [D23729972](https://github.com/facebook/flipper/search?q=D23729972&type=Commits) -  Ability to reload single auto-updated plugin without full Flipper restart.
 
 

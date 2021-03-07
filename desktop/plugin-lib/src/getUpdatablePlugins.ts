@@ -7,20 +7,19 @@
  * @format
  */
 
-import PluginDetails from './PluginDetails';
-import {getInstalledPlugins} from './getInstalledPlugins';
+import {InstalledPluginDetails} from './PluginDetails';
+import {getInstalledPlugins} from './pluginInstaller';
 import semver from 'semver';
 import {getNpmHostedPlugins, NpmPackageDescriptor} from './getNpmHostedPlugins';
 import NpmApi from 'npm-api';
-import getPluginDetails from './getPluginDetails';
-import {getPluginInstallationDir} from './pluginInstaller';
+import {getInstalledPluginDetails, getPluginDetails} from './getPluginDetails';
+import {getPluginVersionInstallationDir} from './pluginPaths';
 import pmap from 'p-map';
 import {notNull} from './typeUtils';
 const npmApi = new NpmApi();
 
 export type UpdateResult =
   | {kind: 'not-installed'; version: string}
-  | {kind: 'pending'}
   | {kind: 'up-to-date'}
   | {kind: 'error'; error: Error}
   | {kind: 'update-available'; version: string};
@@ -29,7 +28,7 @@ export type UpdatablePlugin = {
   updateStatus: UpdateResult;
 };
 
-export type UpdatablePluginDetails = PluginDetails & UpdatablePlugin;
+export type UpdatablePluginDetails = InstalledPluginDetails & UpdatablePlugin;
 
 export async function getUpdatablePlugins(
   query?: string,
@@ -49,8 +48,11 @@ export async function getUpdatablePlugins(
             semver.lt(installedPlugin.version, npmPackageDescriptor.version)
           ) {
             const pkg = await npmApi.repo(npmPackageDescriptor.name).package();
-            const npmPluginDetails = await getPluginDetails(
-              getPluginInstallationDir(npmPackageDescriptor.name),
+            const npmPluginDetails = await getInstalledPluginDetails(
+              getPluginVersionInstallationDir(
+                npmPackageDescriptor.name,
+                npmPackageDescriptor.version,
+              ),
               pkg,
             );
             return {
@@ -62,10 +64,7 @@ export async function getUpdatablePlugins(
             };
           }
         }
-        const updateStatus: UpdateResult =
-          installedPlugin.installationStatus === 'installed'
-            ? {kind: 'up-to-date'}
-            : {kind: 'pending'};
+        const updateStatus: UpdateResult = {kind: 'up-to-date'};
         return {
           ...installedPlugin,
           updateStatus,
@@ -89,10 +88,7 @@ export async function getUpdatablePlugins(
     async (notInstalledPlugin) => {
       try {
         const pkg = await npmApi.repo(notInstalledPlugin.name).package();
-        const npmPluginDetails = await getPluginDetails(
-          getPluginInstallationDir(notInstalledPlugin.name),
-          pkg,
-        );
+        const npmPluginDetails = getPluginDetails(pkg);
         if (npmPluginDetails.specVersion === 1) {
           return null;
         }
@@ -106,6 +102,7 @@ export async function getUpdatablePlugins(
       } catch (error) {
         console.log(
           `Failed to load details from npm for plugin ${notInstalledPlugin.name}`,
+          error,
         );
         return null;
       }

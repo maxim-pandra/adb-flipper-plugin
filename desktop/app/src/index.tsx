@@ -8,19 +8,20 @@
  */
 
 export {default as styled} from '@emotion/styled';
-export {keyframes} from 'emotion';
+export {keyframes} from '@emotion/css';
 export {produce} from 'immer';
 
 export * from './ui/index';
 export {getStringFromErrorLike, textContent, sleep} from './utils/index';
 export {serialize, deserialize} from './utils/serialization';
 export * from './utils/jsonTypes';
-export {default as GK} from './fb-stubs/GK';
+export {default as GK, loadGKs, loadDistilleryGK} from './fb-stubs/GK';
 export {default as createPaste} from './fb-stubs/createPaste';
 export {
   internGraphGETAPIRequest,
   internGraphPOSTAPIRequest,
   graphQLQuery,
+  isLoggedIn,
 } from './fb-stubs/user';
 export {
   FlipperBasePlugin,
@@ -32,7 +33,6 @@ export {
 } from './plugin';
 export {PluginClient, Props} from './plugin';
 export {default as Client} from './Client';
-export {MetricType} from './utils/exportMetrics';
 export {reportUsage} from './utils/metrics';
 export {default as promiseTimeout} from './utils/promiseTimeout';
 export {clipboard, remote, OpenDialogOptions} from 'electron';
@@ -42,11 +42,12 @@ export {connect} from 'react-redux';
 export {selectPlugin, StaticView} from './reducers/connections';
 export {writeBufferToFile, bufferToBlob} from './utils/screenshot';
 export {getPluginKey, getPersistedState} from './utils/pluginUtils';
-export {Idler} from './utils/Idler';
+export {Idler} from 'flipper-plugin';
 export {Store, MiddlewareAPI, State as ReduxState} from './reducers/index';
 export {default as BaseDevice} from './devices/BaseDevice';
 export {DeviceLogEntry, LogLevel, DeviceLogListener} from 'flipper-plugin';
 export {shouldParseAndroidLog} from './utils/crashReporterUtility';
+export {deconstructClientId} from './utils/clientUtils';
 export {default as isProduction} from './utils/isProduction';
 export {createTablePlugin} from './createTablePlugin';
 export {default as DetailSidebar} from './chrome/DetailSidebar';
@@ -166,7 +167,10 @@ export {
   SearchableProps,
   default as Searchable,
 } from './ui/components/searchable/Searchable';
-export {default as SearchableTable} from './ui/components/searchable/SearchableTable';
+export {
+  default as SearchableTable,
+  filterRowsFactory,
+} from './ui/components/searchable/SearchableTable';
 export {default as SearchableTable_immutable} from './ui/components/searchable/SearchableTable_immutable';
 export {
   ElementID,
@@ -198,3 +202,6 @@ export {checkIdbIsInstalled} from './utils/iOSContainerUtility';
 // Sidebar extensions should be last so they can import anything from here.
 export {default as SidebarExtensions} from './fb-stubs/LayoutInspectorSidebarExtensions';
 export {IDEFileResolver, IDEType} from './fb-stubs/IDEFileResolver';
+export {renderMockFlipperWithPlugin} from './test-utils/createMockFlipperWithPlugin';
+export {Tracked} from 'flipper-plugin'; // To be able to use it in legacy plugins
+export {RequireLogin} from './ui/components/RequireLogin';

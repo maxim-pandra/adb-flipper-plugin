@@ -4,7 +4,6 @@ latest
 resources
 templates
 node_modules
-flow-typed
 lib
 !.eslintrc.js
 dist
@@ -14,3 +13,4 @@ scripts/generate-changelog.js
 static/index.js
 static/defaultPlugins/index.json
 app/src/defaultPlugins/index.tsx
+generated

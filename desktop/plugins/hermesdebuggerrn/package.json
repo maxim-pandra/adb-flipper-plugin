@@ -2,7 +2,11 @@
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-hermesdebuggerrn",
   "id": "Hermesdebuggerrn",
-  "version": "0.60.0",
+  "pluginType": "device",
+  "supportedDevices": [
+    {"os": "Metro", "archived": false}
+  ],
+  "version": "0.0.0",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",

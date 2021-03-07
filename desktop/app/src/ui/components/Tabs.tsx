@@ -13,9 +13,10 @@ import Orderable from './Orderable';
 import FlexRow from './FlexRow';
 import {colors} from './colors';
 import Tab, {Props as TabProps} from './Tab';
-import {WidthProperty} from 'csstype';
+import {Property} from 'csstype';
 import React, {useContext} from 'react';
 import {TabsContext} from './TabsContainer';
+import {_wrapInteractionHandler} from 'flipper-plugin';
 
 const TabList = styled(FlexRow)({
   justifyContent: 'center',
@@ -25,7 +26,7 @@ TabList.displayName = 'Tabs:TabList';
 
 const TabListItem = styled.div<{
   active?: boolean;
-  width?: WidthProperty<number>;
+  width?: Property.Width<number>;
   container?: boolean;
 }>((props) => ({
   userSelect: 'none',
@@ -104,6 +105,7 @@ const TabContent = styled.div({
   height: '100%',
   overflow: 'auto',
   width: '100%',
+  display: 'flex',
 });
 TabContent.displayName = 'Tabs:TabContent';
 
@@ -167,6 +169,7 @@ export default function Tabs(props: {
   classic?: boolean;
 }) {
   let tabsContainer = useContext(TabsContext);
+  const scope = useContext((global as any).FlipperTrackingScopeContext);
   if (props.classic === true) {
     tabsContainer = false;
   }
@@ -244,11 +247,17 @@ export default function Tabs(props: {
           container={tabsContainer}
           onMouseDown={
             !isActive && onActive
-              ? (event: React.MouseEvent<HTMLDivElement>) => {
-                  if (event.target !== closeButton) {
-                    onActive(key);
-                  }
-                }
+              ? _wrapInteractionHandler(
+                  (event: React.MouseEvent<HTMLDivElement>) => {
+                    if (event.target !== closeButton) {
+                      onActive(key);
+                    }
+                  },
+                  'Tabs',
+                  'onTabClick',
+                  scope as any,
+                  'tab:' + key + ':' + comp.props.label,
+                )
               : undefined
           }>
           {comp.props.label}

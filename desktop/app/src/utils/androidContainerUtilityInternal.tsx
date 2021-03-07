@@ -15,7 +15,7 @@
 import {UnsupportedError} from './metrics';
 import adbkit, {Client} from 'adbkit';
 
-const allowedAppNameRegex = /^[\w._-]+$/;
+const allowedAppNameRegex = /^[\w.-]+$/;
 const appNotApplicationRegex = /not an application/;
 const appNotDebuggableRegex = /debuggable/;
 const operationNotPermittedRegex = /not permitted/;
@@ -76,10 +76,7 @@ export function _push(
   return executeCommandAsApp(client, deviceId, app, command)
     .then((_) => undefined)
     .catch((error) => {
-      if (
-        error instanceof RunAsError &&
-        error.code == RunAsErrorCode.NotAnApp
-      ) {
+      if (error instanceof RunAsError) {
         // Fall back to running the command directly. This will work if adb is running as root.
         return executeCommandWithSu(client, deviceId, app, command)
           .then((_) => undefined)
@@ -100,7 +97,7 @@ export function _pull(
 ): Promise<string> {
   const command = `cat '${path}'`;
   return executeCommandAsApp(client, deviceId, app, command).catch((error) => {
-    if (error instanceof RunAsError && error.code == RunAsErrorCode.NotAnApp) {
+    if (error instanceof RunAsError) {
       // Fall back to running the command directly. This will work if adb is running as root.
       return executeCommandWithSu(client, deviceId, app, command).catch((e) => {
         // Throw the original error.

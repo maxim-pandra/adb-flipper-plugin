@@ -6,58 +6,14 @@
 
 set -e
 
-darwin=false
-facebook=false
-case "$(uname)" in
-  Darwin*) darwin=true ;;
-esac
-case "$(hostname -f)" in
-  *.facebook.com) facebook=true
-esac
-
-nodejs="/usr/bin/env node"
-if [[ $facebook == true ]]; then
-  nodejs="$(hg root)/xplat/third-party/node/bin/node"
-fi
-
-if ! jq --version > /dev/null; then
-  if $darwin; then
-    echo -e "jq is not installed! Should the script install it for you? (y/n) \\c"
-    read -r REPLY
-    if [ "$REPLY" = "y" ]; then
-      brew install jq
-    else
-      exit 1
-    fi
-  else
-    echo >&2 "jq is not installed. Please install it using your platform's package manager (apt-get, yum, pacman, etc.)."
-    exit 1
-  fi
-fi
-
-echo "Checking for any uncommitted changes..."
-CHANGES=$(hg st)
-echo "$CHANGES"
-
-if [ ! -z "$CHANGES" ];
-then
-    echo "There are uncommitted changes, either commit or revert them."
-    exit 1
-fi
-
 echo "✨ Making a new release..."
 
 # When starting this job from SandcastleFlipperAutoReleaseCommand, we pass in the revision to release
 SANDCASTLE_REVISION="$1"
-# Either 'patch', 'minor', or 'major'
-VERSION_PART="${2:-minor}"
+VERSION="$2"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SONAR_DIR="$DIR/../"
 DESKTOP_DIR="$SONAR_DIR/desktop"
-FLIPPER_PODSPEC_PATH="$SONAR_DIR/Flipper.podspec"
-FLIPPERKIT_VERSION_TAG='flipperkit_version'
-OLD_VERSION_POD_ARG=$(< "$FLIPPER_PODSPEC_PATH" grep "$FLIPPERKIT_VERSION_TAG =" )
-OLD_VERSION="${OLD_VERSION_POD_ARG##* }"
 
 source "$DIR"/setup-env.sh
 
@@ -66,20 +22,18 @@ if [[ ! -d "$DESKTOP_DIR/node_modules" ]]; then
 fi
 
 # if we got called with a rev argument, we got triggered from our automatic sandcastle job
-if [ "$SANDCASTLE_REVISION" != "" ]; 
+if [ "$SANDCASTLE_REVISION" == "" ];
 then
-  echo "Automatically bumping version to next $VERSION_PART version in package.json"
-  npm -C "$DESKTOP_DIR" version "$VERSION_PART"
-  VERSION=$(jq -r '.version' "$DESKTOP_DIR"/package.json)
-else
+  OLD_VERSION=$(jq -r '.version' "$DESKTOP_DIR"/package.json)
   echo "The currently released version is $OLD_VERSION. What should the version of the next release be?"
   read -r VERSION
+  yarn --cwd "$DESKTOP_DIR" version --new-version "$VERSION"
 fi
 
 echo "Preparing release $VERSION..."
 
-# Update all the packages included as workspaces to the very same version
-yarn --cwd "$DESKTOP_DIR" bump-versions --new-version "$VERSION"
+# Update flipper app version to the very same version
+yarn --cwd "$DESKTOP_DIR" version --new-version "$VERSION"
 
 # Update react-native-flipper to the very same version
 yarn --cwd "$SONAR_DIR"/react-native/react-native-flipper version --new-version "$VERSION" --no-git-tag-version
@@ -101,11 +55,15 @@ hg addremove
 hg commit -m "$(echo -e "Flipper Release: v${VERSION}\n\n\
 Summary:\nReleasing version $VERSION\n\n\
 Test Plan:\n\
-* Wait until this build is green\n\
-* Find the release id as explained here: https://our.internmc.facebook.com/intern/wiki/Flipper_Internals/Oncall_Runbook/#testing-the-release-vers and run:
-* \`env FLIPPERVERSION=XXXX /Applications/Flipper.app/Contents/MacOS/Flipper\`\n\
-* ...or, alternatively, run \`yarn build --mac && dist/mac/Flipper.app/Contents/MacOS/Flipper\`\n\
-* Perform exploratory tests\n\n\
+1. Flipper Bot will comment \"#flipperrelease ephemeral\" to trigger a new ephemeral release job [\"flipper-release-ephemeral\"](https://fburl.com/sandcastle/4mt4rj18) on Sandcastle.\n\
+1. After the job has finished, Flipper Bot will post to the Signal Hub the command to run the produced build with the exact version:\n\
+\`env FLIPPERVERSIONV2=<FLIPPERVERSION> RUST_LOG=flipper_launcher=info /Applications/Flipper.app/Contents/MacOS/Flipper\`\n\
+1. Run the build and perform exploratory tests.\n\
+1. If everything is ok, accept and land the diff.\n\
+1. After the diff has landed, Flipper Bot will comment \"#flipperrelease with bump\" to trigger the actual release build job [\"flipper-release\"](https://fburl.com/sandcastle/uh698xj2) on Sandcastle.\n\
+1. After the job has finished, a new diff will be published for pinning the released version to the fbsource checkout, check further instructions in that diff.\n\
+1. In case the release job has failed, Flipper Bot will post to the Signal Hub. In addition to that, the \"flipper\" oncall will receive an e-mail and a task for investigation.\n\n\
+See more details about the Flipper release process [here](https://fburl.com/flipperreleasebot).\n\
 Reviewers: flipper\n\n\
 Tags: accept2ship"
 )"
@@ -123,7 +81,7 @@ Reviewers: flipper\n\n\
 Tags: accept2ship"
 )"
 
-if [ "$SANDCASTLE_REVISION" == "" ]; 
+if [ "$SANDCASTLE_REVISION" == "" ];
 then
   # Submit diffs, we only do this when running locally.
   # From SandcastleFlipperAutoReleaseCommand, the diffs are submitted 

@@ -7,7 +7,14 @@
  * @format
  */
 
-import React, {Component, ReactElement, RefObject} from 'react';
+import React, {
+  Component,
+  ReactElement,
+  RefObject,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import {
   Glyph,
   FlexColumn,
@@ -17,13 +24,17 @@ import {
   styled,
   Input,
   Link,
-} from 'flipper';
-import Popover from '../ui/components/Popover2';
+} from '../ui';
+import LegacyPopover from '../ui/components/Popover2';
+import {LeftRailButton} from '../sandy-chrome/LeftRail';
 import GK from '../fb-stubs/GK';
 import * as UserFeedback from '../fb-stubs/UserFeedback';
 import {FeedbackPrompt} from '../fb-stubs/UserFeedback';
-import {connect} from 'react-redux';
-import {State as Store} from 'app/src/reducers';
+import {StarOutlined} from '@ant-design/icons';
+import {Popover, Rate} from 'antd';
+import {useStore} from '../utils/useStore';
+import {isLoggedIn} from '../fb-stubs/user';
+import {useValue} from 'flipper-plugin';
 
 type PropsFromState = {
   sessionId: string | null;
@@ -172,44 +183,13 @@ class FeedbackComponent extends Component<
     this.setState({allowUserInfoSharing: allowed});
   }
   render() {
-    const stars = Array(5)
-      .fill(true)
-      .map<JSX.Element>((_, index) => (
-        <div
-          key={index}
-          role="button"
-          tabIndex={0}
-          onMouseEnter={() => {
-            this.setState({hoveredRating: index + 1});
-          }}
-          onMouseLeave={() => {
-            this.setState({hoveredRating: 0});
-          }}
-          onClick={() => {
-            this.onSubmitRating(index + 1);
-          }}>
-          <Glyph
-            name={
-              (
-                this.state.hoveredRating
-                  ? index < this.state.hoveredRating
-                  : index < (this.state.rating || 0)
-              )
-                ? 'star'
-                : 'star-outline'
-            }
-            color="grey"
-            size={24}
-          />
-        </div>
-      ));
     let body: Array<ReactElement>;
     switch (this.state.nextAction) {
       case 'select-rating':
         body = [
           <Row key="bodyText">{this.props.promptData.bodyText}</Row>,
           <Row key="stars" style={{margin: 'auto'}}>
-            {stars}
+            <Rate onChange={(newRating) => this.onSubmitRating(newRating)} />
           </Row>,
           dismissRow(this.props.dismiss),
         ];
@@ -308,7 +288,7 @@ class RatingButton extends Component<PropsFromState, State> {
 
   constructor(props: PropsFromState) {
     super(props);
-    if (GK.get('flipper_rating')) {
+    if (GK.get('flipper_enable_star_ratiings')) {
       UserFeedback.getPrompt().then((prompt) => {
         this.setState({promptData: prompt});
         setTimeout(this.triggerPopover.bind(this), 30000);
@@ -374,7 +354,7 @@ class RatingButton extends Component<PropsFromState, State> {
           />
         </div>
         {this.state.isShown ? (
-          <Popover id="rating-button" targetRef={this.glyphRef}>
+          <LegacyPopover id="rating-button" targetRef={this.glyphRef}>
             <FeedbackComponent
               submitRating={this.submitRating.bind(this)}
               submitComment={this.submitComment.bind(this)}
@@ -384,13 +364,95 @@ class RatingButton extends Component<PropsFromState, State> {
               dismiss={this.onClick.bind(this)}
               promptData={promptData}
             />
-          </Popover>
+          </LegacyPopover>
         ) : null}
       </div>
     );
   }
 }
 
-export default connect<{sessionId: string | null}, null, {}, Store>(
-  ({application: {sessionId}}) => ({sessionId}),
-)(RatingButton);
+export function SandyRatingButton() {
+  const [
+    promptData,
+    setPromptData,
+  ] = useState<UserFeedback.FeedbackPrompt | null>(null);
+  const [isShown, setIsShown] = useState(false);
+  const [hasTriggered, setHasTriggered] = useState(false);
+  const sessionId = useStore((store) => store.application.sessionId);
+  const loggedIn = useValue(isLoggedIn());
+
+  const triggerPopover = useCallback(() => {
+    if (!hasTriggered) {
+      setIsShown(true);
+      setHasTriggered(true);
+    }
+  }, [hasTriggered]);
+
+  useEffect(() => {
+    if (GK.get('flipper_enable_star_ratiings') && !hasTriggered && loggedIn) {
+      UserFeedback.getPrompt().then((prompt) => {
+        setPromptData(prompt);
+        setTimeout(triggerPopover, 30000);
+      });
+    }
+  }, [triggerPopover, hasTriggered, loggedIn]);
+
+  const onClick = () => {
+    const willBeShown = !isShown;
+    setIsShown(willBeShown);
+    setHasTriggered(true);
+    if (!willBeShown) {
+      UserFeedback.dismiss(sessionId);
+    }
+  };
+
+  const submitRating = (rating: number) => {
+    UserFeedback.submitRating(rating, sessionId);
+  };
+
+  const submitComment = (
+    rating: number,
+    comment: string,
+    selectedPredefinedComments: Array<string>,
+    allowUserInfoSharing: boolean,
+  ) => {
+    UserFeedback.submitComment(
+      rating,
+      comment,
+      selectedPredefinedComments,
+      allowUserInfoSharing,
+      sessionId,
+    );
+  };
+
+  if (!promptData) {
+    return null;
+  }
+  if (!promptData.shouldPopup || (hasTriggered && !isShown)) {
+    return null;
+  }
+  return (
+    <Popover
+      visible={isShown}
+      content={
+        <FeedbackComponent
+          submitRating={submitRating}
+          submitComment={submitComment}
+          close={() => {
+            setIsShown(false);
+          }}
+          dismiss={onClick}
+          promptData={promptData}
+        />
+      }
+      placement="right"
+      trigger="click">
+      <LeftRailButton
+        icon={<StarOutlined />}
+        title="Rate Flipper"
+        onClick={onClick}
+        small
+      />
+    </Popover>
+  );
+}

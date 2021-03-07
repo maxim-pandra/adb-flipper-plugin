@@ -7,18 +7,19 @@
  * @format
  */
 
-import {Store} from '../reducers/index';
-import {Logger} from '../fb-interfaces/Logger';
-import {PluginDefinition} from '../plugin';
+import type {Store} from '../reducers/index';
+import type {Logger} from '../fb-interfaces/Logger';
+import type {PluginDefinition} from '../plugin';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import adbkit from 'adbkit';
-import * as Flipper from '../index';
 import {
   registerPlugins,
   addGatekeepedPlugins,
   addDisabledPlugins,
   addFailedPlugins,
+  registerLoadedPlugins,
+  registerBundledPlugins,
 } from '../reducers/plugins';
 import GK from '../fb-stubs/GK';
 import {FlipperBasePlugin} from '../plugin';
@@ -29,44 +30,65 @@ import isProduction from '../utils/isProduction';
 import {notNull} from '../utils/typeUtils';
 import {sideEffect} from '../utils/sideEffect';
 import semver from 'semver';
-import {PluginDetails} from 'flipper-plugin-lib';
+import {
+  ActivatablePluginDetails,
+  BundledPluginDetails,
+  PluginDetails,
+} from 'flipper-plugin-lib';
 import {tryCatchReportPluginFailures, reportUsage} from '../utils/metrics';
 import * as FlipperPluginSDK from 'flipper-plugin';
-import {SandyPluginDefinition} from 'flipper-plugin';
+import {_SandyPluginDefinition} from 'flipper-plugin';
 import loadDynamicPlugins from '../utils/loadDynamicPlugins';
-import Immer from 'immer';
+import * as Immer from 'immer';
+import * as antd from 'antd';
+import * as emotion_styled from '@emotion/styled';
+import * as antdesign_icons from '@ant-design/icons';
 
 // eslint-disable-next-line import/no-unresolved
 import getDefaultPluginsIndex from '../utils/getDefaultPluginsIndex';
+import {isDevicePluginDefinition} from '../utils/pluginUtils';
 
 let defaultPluginsIndex: any = null;
 
 export default async (store: Store, logger: Logger) => {
   // expose Flipper and exact globally for dynamically loaded plugins
   const globalObject: any = typeof window === 'undefined' ? global : window;
+
+  // this list should match `replace-flipper-requires.tsx` and the `builtInModules` in `desktop/.eslintrc`
   globalObject.React = React;
   globalObject.ReactDOM = ReactDOM;
-  globalObject.Flipper = Flipper;
+  globalObject.Flipper = require('../index');
   globalObject.adbkit = adbkit;
   globalObject.FlipperPlugin = FlipperPluginSDK;
   globalObject.Immer = Immer;
+  globalObject.antd = antd;
+  globalObject.emotion_styled = emotion_styled;
+  globalObject.antdesign_icons = antdesign_icons;
 
-  const gatekeepedPlugins: Array<PluginDetails> = [];
-  const disabledPlugins: Array<PluginDetails> = [];
-  const failedPlugins: Array<[PluginDetails, string]> = [];
+  const gatekeepedPlugins: Array<ActivatablePluginDetails> = [];
+  const disabledPlugins: Array<ActivatablePluginDetails> = [];
+  const failedPlugins: Array<[ActivatablePluginDetails, string]> = [];
 
   defaultPluginsIndex = getDefaultPluginsIndex();
 
-  const initialPlugins: PluginDefinition[] = filterNewestVersionOfEachPlugin(
-    getBundledPlugins(),
+  const uninstalledPlugins = store.getState().plugins.uninstalledPlugins;
+
+  const bundledPlugins = getBundledPlugins();
+
+  const loadedPlugins = filterNewestVersionOfEachPlugin(
+    bundledPlugins,
     await getDynamicPlugins(),
-  )
+  ).filter((p) => !uninstalledPlugins.has(p.name));
+
+  const initialPlugins: PluginDefinition[] = loadedPlugins
     .map(reportVersion)
     .filter(checkDisabled(disabledPlugins))
     .filter(checkGK(gatekeepedPlugins))
     .map(createRequirePluginFunction(failedPlugins))
     .filter(notNull);
 
+  store.dispatch(registerBundledPlugins(bundledPlugins));
+  store.dispatch(registerLoadedPlugins(loadedPlugins));
   store.dispatch(addGatekeepedPlugins(gatekeepedPlugins));
   store.dispatch(addDisabledPlugins(disabledPlugins));
   store.dispatch(addFailedPlugins(failedPlugins));
@@ -86,7 +108,7 @@ export default async (store: Store, logger: Logger) => {
   );
 };
 
-function reportVersion(pluginDetails: PluginDetails) {
+function reportVersion(pluginDetails: ActivatablePluginDetails) {
   reportUsage(
     'plugin:version',
     {
@@ -97,11 +119,11 @@ function reportVersion(pluginDetails: PluginDetails) {
   return pluginDetails;
 }
 
-export function filterNewestVersionOfEachPlugin(
-  bundledPlugins: PluginDetails[],
-  dynamicPlugins: PluginDetails[],
-): PluginDetails[] {
-  const pluginByName: {[key: string]: PluginDetails} = {};
+export function filterNewestVersionOfEachPlugin<
+  T1 extends PluginDetails,
+  T2 extends PluginDetails
+>(bundledPlugins: T1[], dynamicPlugins: T2[]): (T1 | T2)[] {
+  const pluginByName: {[key: string]: T1 | T2} = {};
   for (const plugin of bundledPlugins) {
     pluginByName[plugin.name] = plugin;
   }
@@ -117,7 +139,7 @@ export function filterNewestVersionOfEachPlugin(
   return Object.values(pluginByName);
 }
 
-function getBundledPlugins(): Array<PluginDetails> {
+function getBundledPlugins(): Array<BundledPluginDetails> {
   // DefaultPlugins that are included in the bundle.
   // List of defaultPlugins is written at build time
   const pluginPath =
@@ -126,7 +148,7 @@ function getBundledPlugins(): Array<PluginDetails> {
       ? path.join(__dirname, 'defaultPlugins')
       : './defaultPlugins/index.json');
 
-  let bundledPlugins: Array<PluginDetails> = [];
+  let bundledPlugins: Array<BundledPluginDetails> = [];
   try {
     bundledPlugins = global.electronRequire(pluginPath);
   } catch (e) {
@@ -145,43 +167,84 @@ export async function getDynamicPlugins() {
   }
 }
 
-export const checkGK = (gatekeepedPlugins: Array<PluginDetails>) => (
-  plugin: PluginDetails,
+export const checkGK = (gatekeepedPlugins: Array<ActivatablePluginDetails>) => (
+  plugin: ActivatablePluginDetails,
 ): boolean => {
-  if (!plugin.gatekeeper) {
-    return true;
+  try {
+    if (!plugin.gatekeeper) {
+      return true;
+    }
+    const result = GK.get(plugin.gatekeeper);
+    if (!result) {
+      gatekeepedPlugins.push(plugin);
+    }
+    return result;
+  } catch (err) {
+    console.error(`Failed to check GK for plugin ${plugin.id}`, err);
+    return false;
   }
-  const result = GK.get(plugin.gatekeeper);
-  if (!result) {
-    gatekeepedPlugins.push(plugin);
-  }
-  return result;
 };
 
-export const checkDisabled = (disabledPlugins: Array<PluginDetails>) => (
-  plugin: PluginDetails,
-): boolean => {
+export const checkDisabled = (
+  disabledPlugins: Array<ActivatablePluginDetails>,
+) => {
+  let enabledList: Set<string> | null = null;
   let disabledList: Set<string> = new Set();
   try {
+    if (process.env.FLIPPER_ENABLED_PLUGINS) {
+      enabledList = new Set<string>(
+        process.env.FLIPPER_ENABLED_PLUGINS.split(','),
+      );
+    }
     disabledList = config().disabledPlugins;
   } catch (e) {
-    console.error(e);
+    console.error('Failed to compute enabled/disabled plugins', e);
   }
-
-  if (disabledList.has(plugin.name)) {
-    disabledPlugins.push(plugin);
-  }
-
-  return !disabledList.has(plugin.name);
+  return (plugin: ActivatablePluginDetails): boolean => {
+    try {
+      if (disabledList.has(plugin.name)) {
+        disabledPlugins.push(plugin);
+        return false;
+      }
+      if (
+        enabledList &&
+        !(
+          enabledList.has(plugin.name) ||
+          enabledList.has(plugin.id) ||
+          enabledList.has(plugin.name.replace('flipper-plugin-', ''))
+        )
+      ) {
+        disabledPlugins.push(plugin);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error(
+        `Failed to check whether plugin ${plugin.id} is disabled`,
+        e,
+      );
+      return false;
+    }
+  };
 };
 
 export const createRequirePluginFunction = (
-  failedPlugins: Array<[PluginDetails, string]>,
+  failedPlugins: Array<[ActivatablePluginDetails, string]>,
   reqFn: Function = global.electronRequire,
 ) => {
-  return (pluginDetails: PluginDetails): PluginDefinition | null => {
+  return (pluginDetails: ActivatablePluginDetails): PluginDefinition | null => {
     try {
-      return requirePlugin(pluginDetails, reqFn);
+      const pluginDefinition = requirePlugin(pluginDetails, reqFn);
+      if (
+        pluginDefinition &&
+        isDevicePluginDefinition(pluginDefinition) &&
+        pluginDefinition.details.pluginType !== 'device'
+      ) {
+        console.warn(
+          `Package ${pluginDefinition.details.name} contains the device plugin "${pluginDefinition.title}" defined in a wrong format. Specify "pluginType" and "supportedDevices" properties and remove exported function "supportsDevice". See details at https://fbflipper.com/docs/extending/desktop-plugin-structure#creating-a-device-plugin.`,
+        );
+      }
+      return pluginDefinition;
     } catch (e) {
       failedPlugins.push([pluginDetails, e.message]);
       console.error(`Plugin ${pluginDetails.id} failed to load`, e);
@@ -191,9 +254,16 @@ export const createRequirePluginFunction = (
 };
 
 export const requirePlugin = (
-  pluginDetails: PluginDetails,
+  pluginDetails: ActivatablePluginDetails,
   reqFn: Function = global.electronRequire,
 ): PluginDefinition => {
+  reportUsage(
+    'plugin:load',
+    {
+      version: pluginDetails.version,
+    },
+    pluginDetails.id,
+  );
   return tryCatchReportPluginFailures(
     () => requirePluginInternal(pluginDetails, reqFn),
     'plugin:load',
@@ -202,15 +272,15 @@ export const requirePlugin = (
 };
 
 const requirePluginInternal = (
-  pluginDetails: PluginDetails,
+  pluginDetails: ActivatablePluginDetails,
   reqFn: Function = global.electronRequire,
 ): PluginDefinition => {
-  let plugin = pluginDetails.isDefault
+  let plugin = pluginDetails.isBundled
     ? defaultPluginsIndex[pluginDetails.name]
     : reqFn(pluginDetails.entry);
   if (pluginDetails.flipperSDKVersion) {
     // Sandy plugin
-    return new SandyPluginDefinition(pluginDetails, plugin);
+    return new _SandyPluginDefinition(pluginDetails, plugin);
   } else {
     // classic plugin
     if (plugin.default) {
@@ -220,6 +290,11 @@ const requirePluginInternal = (
       throw new Error(`Plugin ${plugin.name} is not a FlipperBasePlugin`);
     }
 
+    if (plugin.id && pluginDetails.id !== plugin.id) {
+      console.error(
+        `Plugin name mismatch: Package '${pluginDetails.id}' exposed a plugin with id '${plugin.id}'. Please update the 'package.json' to match the exposed plugin id`,
+      );
+    }
     plugin.id = plugin.id || pluginDetails.id;
     plugin.packageName = pluginDetails.name;
     plugin.details = pluginDetails;
@@ -227,7 +302,8 @@ const requirePluginInternal = (
     // set values from package.json as static variables on class
     Object.keys(pluginDetails).forEach((key) => {
       if (key !== 'name' && key !== 'id') {
-        plugin[key] = plugin[key] || pluginDetails[key as keyof PluginDetails];
+        plugin[key] =
+          plugin[key] || pluginDetails[key as keyof ActivatablePluginDetails];
       }
     });
   }

@@ -34,12 +34,16 @@ export type Action =
       type: 'CLEAR_MESSAGE_QUEUE';
       payload: {
         pluginKey: string; // client + plugin
-        amount: number;
+        amount?: number;
       };
     }
   | {
-      type: 'CLEAR_PLUGIN_STATE';
+      type: 'CLEAR_CLIENT_PLUGINS_STATE';
       payload: {clientId: string; devicePlugins: Set<string>};
+    }
+  | {
+      type: 'CLEAR_PLUGIN_STATE';
+      payload: {pluginId: string};
     };
 
 const INITIAL_STATE: State = {};
@@ -71,12 +75,16 @@ export default function reducer(
       return produce(state, (draft) => {
         const messages = draft[pluginKey];
         if (messages) {
-          messages.splice(0, amount);
+          if (amount === undefined) {
+            delete draft[pluginKey];
+          } else {
+            messages.splice(0, amount);
+          }
         }
       });
     }
 
-    case 'CLEAR_PLUGIN_STATE': {
+    case 'CLEAR_CLIENT_PLUGINS_STATE': {
       const {payload} = action;
       return Object.keys(state).reduce((newState: State, pluginKey) => {
         // Only add the pluginState, if its from a plugin other than the one that
@@ -93,6 +101,19 @@ export default function reducer(
         return newState;
       }, {});
     }
+
+    case 'CLEAR_PLUGIN_STATE': {
+      const {pluginId} = action.payload;
+      return produce(state, (draft) => {
+        Object.keys(draft).forEach((pluginKey) => {
+          const pluginKeyParts = deconstructPluginKey(pluginKey);
+          if (pluginKeyParts.pluginName === pluginId) {
+            delete draft[pluginKey];
+          }
+        });
+      });
+    }
+
     default:
       return state;
   }
@@ -113,7 +134,7 @@ export const queueMessages = (
 
 export const clearMessageQueue = (
   pluginKey: string,
-  amount: number,
+  amount?: number,
 ): Action => ({
   type: 'CLEAR_MESSAGE_QUEUE',
   payload: {pluginKey, amount},

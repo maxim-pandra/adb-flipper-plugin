@@ -3,10 +3,29 @@ id: testing
 title: Testing
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import FbIosTesting from '../fb/ios-plugin-development-testing-ios-plugins-0.mdx';
+import FbAndroidTesting from '../fb/android-plugin-development-testing-android-plugins-0.mdx';
+
 Developer tools are only used if they work. We have built APIs to test plugins.
 
-## Android
+## Writing tests
 
+## Desktop plugins
+
+Flipper uses [Jest](https://jestjs.io/) as unit testing framework.
+
+Writing unit tests for Flipper Desktop plugins is covered in detail in the [tutorial](../../docs/tutorial/js-custom#testing-plugin-logic). 
+
+The `flipper-plugin` package provide several [test utilities](../../docs/extending/flipper-plugin#testutils) to make testing more convenient. 
+
+## Client plugins
+
+<Tabs defaultValue="android" values={[{label: 'Android', value: 'android'}, { label: 'iOS', value: 'ios'}]}>
+<TabItem value="android">
+
+<OssOnly>
 Start by creating your first test file in this directory `MyFlipperPluginTest.java`. In the test method body we create our plugin which we want to test as well as a `FlipperConnectionMock`. In this contrived example we simply assert that our plugin's connected status is what we expect.
 
 ```java
@@ -46,8 +65,14 @@ public void myTest() {
           .build()));
 }
 ```
+</OssOnly>
 
-## C++
+<FbAndroidTesting />
+
+</TabItem>
+<TabItem value="ios">
+
+<OssOnly>
 
 Start by creating your first test file in this directory `MyFlipperPluginTests.cpp` and import the testing utilities from `fbsource//xplat/sonar/xplat:FlipperTestLib`. These utilities mock out core pieces of the communication channel so that you can test your plugin in isolation.
 
@@ -93,20 +118,76 @@ TEST(MyFlipperPluginTests, testDummy) {
   EXPECT_EQ(successfulResponses.back(), expectedResponse);
 }
 ```
+</OssOnly>
 
-## Testing the Flipper Desktop Plugin
+<FbIosTesting />
 
-Tests should be put in the `__tests__` directory of your plugin sources, and be created using Jest.
-An example test suite can be found [here](https://github.com/facebook/flipper/blob/master/desktop/plugins/layout/__tests__/ProxyArchiveClient.node.tsx).
+</TabItem>
+</Tabs>
 
-Flipper exposes an API to generate unit tests that can verify _regressions_ and real life scenarios.
-To generate a unit test:
+## Running (Flipper) tests
 
-1. Start flipper.
-2. Open your plugin.
-3. Open the Developer Tools (`View > Open Developer Tools`).
-4. In the console, call the function `flipperStartPluginRecording()`.
-5. Interact with your application, in such a way that new events are created for your plugin.
-6. Once you generated an interesting amount and diversity of events, call `flipperStopPluginRecording()` from the Flipper console.
-7. This process will have generated a unit test and a snapshot file with the data (the console will report where). Move those files to your `__tests__` directory.
-8. The unit test should succeed if it is run using Jest. Feel free to modify the unit test to your needs. In the future you might want to record new snapshot data files if the plugin changes.
+### Flipper Desktop
+
+<OssOnly>
+
+Run `yarn jest` or `yarn jest --watch` in the `desktop` directory of your Flipper checkout.
+
+</OssOnly>
+
+<FbInternalOnly>
+
+Run `yarn jest` or `yarn jest --watch` in `~/fbsource/xplat/sonar/desktop`
+
+</FbInternalOnly>
+
+### Flipper SDK
+
+#### Android (Java)
+
+<OssOnly>
+
+##### Gradle:
+
+In the root directory of the checkout:
+
+```
+./gradlew android:test
+```
+
+</OssOnly>
+
+<FbInternalOnly>
+
+##### Gradle:
+
+```
+cd fbsource/xplat/sonar
+./gradlew android:test
+```
+
+##### Buck:
+
+I don't know of a way to run them locally 😞 Make a change and submit a diff.
+
+`buck test ...` should work, but doesn't seem to when run in xplat on mac but they do work on mobile on demand, if you use @mode/server.
+
+*Debugging note: They do work if you copy the files and BUCK file to* `fbandroid/javatests` *and change the rule from* `sonar_android_test` *to* `robolectric3_test`
+
+</FbInternalOnly>
+
+<FbInternalOnly>
+
+### iOS
+
+Focus on the plugins, or flipper code you want but with the --with-tests param.
+
+`arc focus ... --with-tests`
+
+Then click the <-> icon  in xcode and you can run them there.
+
+</FbInternalOnly>
+
+### React Native
+
+See [testing React Native](testing-rn).

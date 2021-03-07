@@ -9,7 +9,7 @@
 
 import {Component} from 'react';
 import {Elements, DecorateRow} from './elements';
-import {ContextMenuExtension} from 'flipper';
+import {ContextMenuExtension} from '../../../ui';
 import React from 'react';
 
 export type ElementID = string;
@@ -80,9 +80,7 @@ export type ElementsInspectorProps = {
   decorateRow?: DecorateRow;
 };
 
-export default class ElementsInspector extends Component<
-  ElementsInspectorProps
-> {
+export default class ElementsInspector extends Component<ElementsInspectorProps> {
   static defaultProps = {
     alternateRowColor: true,
   };

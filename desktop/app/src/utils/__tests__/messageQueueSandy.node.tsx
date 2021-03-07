@@ -12,7 +12,6 @@ import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWit
 import {Store, Client, sleep} from '../../';
 import {
   selectPlugin,
-  starPlugin,
   selectClient,
   selectDevice,
 } from '../../reducers/connections';
@@ -21,11 +20,12 @@ import {getPluginKey} from '../pluginUtils';
 import {TestIdler} from '../Idler';
 import {registerPlugins} from '../../reducers/plugins';
 import {
-  SandyPluginDefinition,
+  _SandyPluginDefinition,
   TestUtils,
   PluginClient,
-  SandyPluginInstance,
+  _SandyPluginInstance,
 } from 'flipper-plugin';
+import {switchPlugin} from '../../reducers/pluginManager';
 
 type Events = {
   inc: {
@@ -47,7 +47,7 @@ function plugin(client: PluginClient<Events, {}>) {
   };
 }
 
-const TestPlugin = new SandyPluginDefinition(
+const TestPlugin = new _SandyPluginDefinition(
   TestUtils.createMockPluginDetails(),
   {
     plugin,
@@ -57,9 +57,9 @@ const TestPlugin = new SandyPluginDefinition(
   },
 );
 
-function starTestPlugin(store: Store, client: Client) {
+function switchTestPlugin(store: Store, client: Client) {
   store.dispatch(
-    starPlugin({
+    switchPlugin({
       plugin: TestPlugin,
       selectedApp: client.query.app,
     }),
@@ -184,8 +184,8 @@ test('queue - events are NOT processed immediately if plugin is NOT selected (bu
     [pluginKey]: [],
   });
 
-  // unstar. Messages don't arrive anymore
-  starTestPlugin(store, client);
+  // disable. Messages don't arrive anymore
+  switchTestPlugin(store, client);
   // weird state...
   selectTestPlugin(store, client);
   sendMessage('inc', {delta: 3});
@@ -193,7 +193,7 @@ test('queue - events are NOT processed immediately if plugin is NOT selected (bu
   // active, immediately processed
   expect(client.sandyPluginStates.has(TestPlugin.id)).toBe(false);
 
-  // different plugin, and not starred, message will never arrive
+  // different plugin, and not enabled, message will never arrive
   selectDeviceLogs(store);
   sendMessage('inc', {delta: 4});
   client.flushMessageBuffer();
@@ -201,13 +201,62 @@ test('queue - events are NOT processed immediately if plugin is NOT selected (bu
   expect(store.getState().pluginMessageQueue).toEqual({});
 
   // star again, plugin still not selected, message is queued
-  starTestPlugin(store, client);
+  switchTestPlugin(store, client);
   sendMessage('inc', {delta: 5});
   client.flushMessageBuffer();
 
   expect(store.getState().pluginMessageQueue).toEqual({
     [pluginKey]: [{api: 'TestPlugin', method: 'inc', params: {delta: 5}}],
   });
+});
+
+test('queue - events ARE processed immediately if plugin is NOT selected / enabled BUT NAVIGATION', async () => {
+  const NavigationPlugin = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails({
+      id: 'Navigation',
+    }),
+    {
+      plugin,
+      Component() {
+        return null;
+      },
+    },
+  );
+  const {store, client, sendMessage} = await createMockFlipperWithPlugin(
+    NavigationPlugin,
+  );
+
+  // Pre setup, deselect AND disable
+  selectDeviceLogs(store);
+  expect(store.getState().connections.selectedPlugin).toBe('DeviceLogs');
+  store.dispatch(
+    switchPlugin({
+      plugin: NavigationPlugin,
+      selectedApp: client.query.app,
+    }),
+  );
+  expect(store.getState().connections.enabledPlugins).toMatchInlineSnapshot(`
+    Object {
+      "TestApp": Array [],
+    }
+  `);
+
+  // ...mesages are still going to arrive
+  const pluginState = () =>
+    client.sandyPluginStates.get(NavigationPlugin.id)!.instanceApi.state;
+
+  sendMessage('inc', {});
+  sendMessage('inc', {delta: 2});
+  sendMessage('inc', {delta: 3});
+  // the first message is already visible cause of the leading debounce
+  expect(pluginState().count).toBe(1);
+  // message queue was never involved due to the bypass...
+  expect(store.getState().pluginMessageQueue).toMatchInlineSnapshot(
+    `Object {}`,
+  );
+  // flush will make the others visible
+  client.flushMessageBuffer();
+  expect(pluginState().count).toBe(6);
 });
 
 test('queue - events are queued for plugins that are favorite when app is not selected', async () => {
@@ -455,7 +504,7 @@ test('queue - make sure resetting plugin state clears the message queue', async 
   expect(store.getState().pluginMessageQueue[pluginKey].length).toBe(2);
 
   store.dispatch({
-    type: 'CLEAR_PLUGIN_STATE',
+    type: 'CLEAR_CLIENT_PLUGINS_STATE',
     payload: {clientId: client.id, devicePlugins: new Set()},
   });
 
@@ -549,7 +598,7 @@ test('client - incoming messages are buffered and flushed together', async () =>
     }
   `);
   expect(client.messageBuffer[pluginKey].plugin).toBeInstanceOf(
-    SandyPluginInstance,
+    _SandyPluginInstance,
   );
 
   await sleep(500);
@@ -678,14 +727,14 @@ test('queue - messages that have not yet flushed be lost when disabling the plug
   `);
 
   // disable
-  starTestPlugin(store, client);
+  switchTestPlugin(store, client);
   expect(client.messageBuffer).toMatchInlineSnapshot(`Object {}`);
   expect(store.getState().pluginMessageQueue).toMatchInlineSnapshot(
     `Object {}`,
   );
 
   // re-enable, no messages arrive
-  starTestPlugin(store, client);
+  switchTestPlugin(store, client);
   client.flushMessageBuffer();
   processMessageQueue(
     client.sandyPluginStates.get(TestPlugin.id)!,

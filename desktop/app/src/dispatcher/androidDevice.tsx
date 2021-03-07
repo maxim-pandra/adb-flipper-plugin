@@ -20,6 +20,7 @@ import {promisify} from 'util';
 import {ServerPorts} from '../reducers/application';
 import {Client as ADBClient} from 'adbkit';
 import {addErrorNotification} from '../reducers/notifications';
+import {destroyDevice} from '../reducers/connections';
 
 function createDevice(
   adbClient: ADBClient,
@@ -144,7 +145,7 @@ export default (store: Store, logger: Logger) => {
           `${emulatorPath} -list-avds`,
           (error: Error | null, data: string | null) => {
             if (error != null || data == null) {
-              console.error(error || 'Failed to list AVDs');
+              console.warn('List AVD failed: ', error);
               return;
             }
             const payload = data.split('\n').filter(Boolean);
@@ -172,7 +173,7 @@ export default (store: Store, logger: Logger) => {
                   .map((device: BaseDevice) => device.serial);
 
                 unregisterDevices(deviceIDsToRemove);
-                console.error('adb server was shutdown');
+                console.warn('adb server was shutdown');
                 setTimeout(watchAndroidDevices, 500);
               } else {
                 throw err;
@@ -206,7 +207,7 @@ export default (store: Store, logger: Logger) => {
           });
       })
       .catch((e) => {
-        console.error(`Failed to watch for android devices: ${e.message}`);
+        console.warn(`Failed to watch for android devices: ${e.message}`);
       });
   };
 
@@ -231,16 +232,18 @@ export default (store: Store, logger: Logger) => {
       .getState()
       .connections.devices.filter(
         (device: BaseDevice) =>
-          device.serial === androidDevice.serial && device.isArchived,
+          device.serial === androidDevice.serial && !device.connected.get(),
       )
       .map((device) => device.serial);
 
-    store.dispatch({
-      type: 'UNREGISTER_DEVICES',
-      payload: new Set(reconnectedDevices),
+    reconnectedDevices.forEach((serial) => {
+      destroyDevice(store, logger, serial);
     });
 
-    androidDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
+    androidDevice.loadDevicePlugins(
+      store.getState().plugins.devicePlugins,
+      store.getState().connections.enabledDevicePlugins,
+    );
     store.dispatch({
       type: 'REGISTER_DEVICE',
       payload: androidDevice,
@@ -262,28 +265,11 @@ export default (store: Store, logger: Logger) => {
       }),
     );
 
-    const archivedDevices = deviceIds
-      .map((id) => {
-        const device = store
-          .getState()
-          .connections.devices.find((device) => device.serial === id);
-        if (device && !device.isArchived) {
-          return device.archive();
-        }
-      })
-      .filter(Boolean);
-
-    store.dispatch({
-      type: 'UNREGISTER_DEVICES',
-      payload: new Set(deviceIds),
-    });
-
-    archivedDevices.forEach((device: BaseDevice) => {
-      device.loadDevicePlugins(store.getState().plugins.devicePlugins);
-      store.dispatch({
-        type: 'REGISTER_DEVICE',
-        payload: device,
-      });
+    deviceIds.forEach((id) => {
+      const device = store
+        .getState()
+        .connections.devices.find((device) => device.serial === id);
+      device?.disconnect();
     });
   }
 

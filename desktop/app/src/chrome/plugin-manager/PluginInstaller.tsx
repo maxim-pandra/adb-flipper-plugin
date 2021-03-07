@@ -24,12 +24,12 @@ import {
   Text,
   LoadingIndicator,
   Tooltip,
-} from 'flipper';
+} from '../../ui';
 import React, {useCallback, useState, useEffect} from 'react';
 import {List} from 'immutable';
 import {reportPlatformFailures, reportUsage} from '../../utils/metrics';
 import reloadFlipper from '../../utils/reloadFlipper';
-import {registerInstalledPlugins} from '../../reducers/pluginManager';
+import {registerInstalledPlugins} from '../../reducers/plugins';
 import {
   UpdateResult,
   getInstalledPlugins,
@@ -92,7 +92,7 @@ const RestartBar = styled(FlexColumn)({
 });
 
 type PropsFromState = {
-  installedPlugins: InstalledPluginDetails[];
+  installedPlugins: Map<string, InstalledPluginDetails>;
 };
 
 type DispatchFromProps = {
@@ -289,7 +289,7 @@ function InstallButton(props: {
 function useNPMSearch(
   query: string,
   onInstall: () => void,
-  installedPlugins: InstalledPluginDetails[],
+  installedPlugins: Map<string, InstalledPluginDetails>,
 ): TableRows_immutable {
   useEffect(() => {
     reportUsage(`${TAG}:open`);
@@ -366,7 +366,7 @@ function useNPMSearch(
 PluginInstaller.defaultProps = defaultProps;
 
 export default connect<PropsFromState, DispatchFromProps, OwnProps, AppState>(
-  ({pluginManager: {installedPlugins}}) => ({
+  ({plugins: {installedPlugins}}) => ({
     installedPlugins,
   }),
   (dispatch: Dispatch<Action<any>>) => ({

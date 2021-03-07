@@ -7,7 +7,8 @@
  * @format
  */
 
-import {Idler} from './Idler';
+import {Idler} from 'flipper-plugin';
+
 export async function serialize(
   obj: Object,
   idler?: Idler,
@@ -139,9 +140,6 @@ export async function makeObjectSerializable(
   let prevStackLength = stack.length;
   let accumulator = prevStackLength;
   while (stack.length > 0) {
-    if (idler && idler.shouldIdle()) {
-      await idler.idle();
-    }
     const element = stack[stack.length - 1];
     if (element instanceof Map) {
       const {childNeedsIteration, outputArray} = processMapElement(
@@ -173,7 +171,7 @@ export async function makeObjectSerializable(
     } else if (element instanceof Date) {
       dict.set(element, {
         __flipper_object_type__: 'Date',
-        data: element.toString(),
+        data: element.toJSON(),
       });
     } else if (element instanceof Array) {
       const {childNeedsIteration, outputArr} = processArray(
@@ -201,13 +199,16 @@ export async function makeObjectSerializable(
     ++numIterations;
     accumulator +=
       stack.length >= prevStackLength ? stack.length - prevStackLength + 1 : 0;
-    const percentage = (numIterations / accumulator) * 100;
-    statusUpdate &&
-      statusUpdate(
-        `${
-          statusMsg || 'Serializing Flipper '
-        }: ${numIterations} / ${accumulator} (${percentage.toFixed(2)}%) `,
-      );
+    if (idler && idler.shouldIdle()) {
+      const percentage = (numIterations / accumulator) * 100;
+      statusUpdate &&
+        statusUpdate(
+          `${
+            statusMsg || 'Serializing Flipper '
+          }: ${numIterations} / ${accumulator} (${percentage.toFixed(2)}%) `,
+        );
+      await idler.idle();
+    }
     prevStackLength = stack.length;
   }
   return dict.get(obj);

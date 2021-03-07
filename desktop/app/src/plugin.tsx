@@ -8,21 +8,18 @@
  */
 
 import {KeyboardActions} from './MenuBar';
-import {App} from './App';
 import {Logger} from './fb-interfaces/Logger';
 import Client from './Client';
 import {Store} from './reducers/index';
-import {MetricType} from './utils/exportMetrics';
 import {ReactNode, Component} from 'react';
 import BaseDevice from './devices/BaseDevice';
 import {serialize, deserialize} from './utils/serialization';
-import {Idler} from './utils/Idler';
 import {StaticView} from './reducers/connections';
 import {State as ReduxState} from './reducers';
 import {DEFAULT_MAX_QUEUE_SIZE} from './reducers/pluginMessageQueue';
-import {PluginDetails} from 'flipper-plugin-lib';
+import {ActivatablePluginDetails} from 'flipper-plugin-lib';
 import {Settings} from './reducers/settings';
-import {SandyPluginDefinition} from 'flipper-plugin';
+import {Idler, _SandyPluginDefinition} from 'flipper-plugin';
 
 type Parameters = {[key: string]: any};
 
@@ -30,19 +27,19 @@ export type PluginDefinition = ClientPluginDefinition | DevicePluginDefinition;
 
 export type DevicePluginDefinition =
   | typeof FlipperDevicePlugin
-  | SandyPluginDefinition;
+  | _SandyPluginDefinition;
 
 export type ClientPluginDefinition =
   | typeof FlipperPlugin
-  | SandyPluginDefinition;
+  | _SandyPluginDefinition;
 
 export type ClientPluginMap = Map<string, ClientPluginDefinition>;
 export type DevicePluginMap = Map<string, DevicePluginDefinition>;
 
 export function isSandyPlugin(
   plugin?: PluginDefinition | null,
-): plugin is SandyPluginDefinition {
-  return plugin instanceof SandyPluginDefinition;
+): plugin is _SandyPluginDefinition {
+  return plugin instanceof _SandyPluginDefinition;
 }
 
 // This function is intended to be called from outside of the plugin.
@@ -64,6 +61,7 @@ export function supportsMethod(
 }
 
 export interface PluginClient {
+  isConnected: boolean;
   // eslint-disable-next-line
   send(method: string, params?: Parameters): void;
   // eslint-disable-next-line
@@ -124,20 +122,18 @@ export abstract class FlipperBasePlugin<
   static version: string = '';
   static icon: string | null = null;
   static gatekeeper: string | null = null;
-  static entry: string | null = null;
-  static isDefault: boolean;
-  static details: PluginDetails | undefined;
+  static isBundled: boolean;
+  static details: ActivatablePluginDetails;
   static keyboardActions: KeyboardActions | null;
   static screenshot: string | null;
   static defaultPersistedState: any;
   static persistedStateReducer: PersistedStateReducer | null;
   static maxQueueSize: number = DEFAULT_MAX_QUEUE_SIZE;
-  static metricsReducer:
-    | ((persistedState: StaticPersistedState) => Promise<MetricType>)
-    | undefined;
   static exportPersistedState:
     | ((
-        callClient: (method: string, params?: any) => Promise<any>,
+        callClient:
+          | undefined
+          | ((method: string, params?: any) => Promise<any>),
         persistedState: StaticPersistedState | undefined,
         store: ReduxState | undefined,
         idler?: Idler,
@@ -162,7 +158,6 @@ export abstract class FlipperBasePlugin<
   reducers: {
     [actionName: string]: (state: State, actionData: any) => Partial<State>;
   } = {};
-  app: App | null = null;
   onKeyboardAction: ((action: string) => void) | undefined;
 
   toJSON() {
@@ -246,6 +241,7 @@ export class FlipperDevicePlugin<
     this.teardown();
   }
 
+  // TODO T84453692: remove this function after some transition period in favor of BaseDevice.supportsPlugin.
   static supportsDevice(_device: BaseDevice): boolean {
     throw new Error(
       'supportsDevice is unimplemented in FlipperDevicePlugin class',
@@ -264,8 +260,11 @@ export class FlipperPlugin<
     // @ts-ignore constructor should be assigned already
     const {id} = this.constructor;
     this.subscriptions = [];
-    this.realClient = props.target as Client;
+    const realClient = (this.realClient = props.target as Client);
     this.client = {
+      get isConnected() {
+        return realClient.connected.get();
+      },
       call: (method, params) => this.realClient.call(id, method, true, params),
       send: (method, params) => this.realClient.send(id, method, params),
       subscribe: (method, callback) => {
@@ -287,8 +286,15 @@ export class FlipperPlugin<
   client: PluginClient;
   realClient: Client;
 
+  /**
+   * @deprecated use .device instead
+   */
   getDevice(): Promise<BaseDevice> {
     return this.realClient.device;
+  }
+
+  get device() {
+    return this.realClient.deviceSync;
   }
 
   _teardown() {

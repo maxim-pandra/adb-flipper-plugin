@@ -18,9 +18,11 @@ import child_process from 'child_process';
 const execFile = child_process.execFile;
 import iosUtil from '../utils/iOSContainerUtility';
 import IOSDevice from '../devices/IOSDevice';
-import isProduction from '../utils/isProduction';
 import {registerDeviceCallbackOnPlugins} from '../utils/onRegisterDevice';
 import {addErrorNotification} from '../reducers/notifications';
+import {getStaticPath} from '../utils/pathUtils';
+import {destroyDevice} from '../reducers/connections';
+import {IOSBridge, makeIOSBridge} from '../utils/IOSBridge';
 
 type iOSSimulatorDevice = {
   state: 'Booted' | 'Shutdown' | 'Shutting Down';
@@ -53,18 +55,27 @@ function isAvailable(simulator: iOSSimulatorDevice): boolean {
   );
 }
 
-const portforwardingClient = isProduction()
-  ? path.resolve(
-      __dirname,
-      'PortForwardingMacApp.app/Contents/MacOS/PortForwardingMacApp',
-    )
-  : 'PortForwardingMacApp.app/Contents/MacOS/PortForwardingMacApp';
+const portforwardingClient = path.join(
+  getStaticPath(),
+  'PortForwardingMacApp.app/Contents/MacOS/PortForwardingMacApp',
+);
 
 function forwardPort(port: number, multiplexChannelPort: number) {
-  return execFile(portforwardingClient, [
-    `-portForward=${port}`,
-    `-multiplexChannelPort=${multiplexChannelPort}`,
-  ]);
+  const childProcess = execFile(
+    portforwardingClient,
+    [`-portForward=${port}`, `-multiplexChannelPort=${multiplexChannelPort}`],
+    (err, stdout, stderr) => {
+      console.error('Port forwarding app failed to start', err, stdout, stderr);
+    },
+  );
+  console.log('Port forwarding app started', childProcess);
+  childProcess.addListener('error', (err) =>
+    console.error('Port forwarding app error', err),
+  );
+  childProcess.addListener('exit', (code) =>
+    console.log(`Port forwarding app exited with code ${code}`),
+  );
+  return childProcess;
 }
 
 function startDevicePortForwarders(): void {
@@ -82,23 +93,53 @@ if (typeof window !== 'undefined') {
   });
 }
 
-async function queryDevices(store: Store, logger: Logger): Promise<any> {
-  return Promise.all([
-    checkXcodeVersionMismatch(store),
-    getSimulators(true).then((devices) => {
-      processDevices(store, logger, devices, 'emulator');
+export function getAllPromisesForQueryingDevices(
+  store: Store,
+  logger: Logger,
+  iosBridge: IOSBridge,
+  isXcodeDetected: boolean,
+): Array<Promise<any>> {
+  const promArray = [
+    getActiveDevices(
+      store.getState().settingsState.idbPath,
+      store.getState().settingsState.enablePhysicalIOS,
+    ).then((devices: IOSDeviceParams[]) => {
+      processDevices(store, logger, iosBridge, devices, 'physical');
     }),
-    getActiveDevices(store.getState().settingsState.idbPath).then(
-      (devices: IOSDeviceParams[]) => {
-        processDevices(store, logger, devices, 'physical');
-      },
+  ];
+  if (isXcodeDetected) {
+    promArray.push(
+      ...[
+        checkXcodeVersionMismatch(store),
+        getSimulators(store, true).then((devices) => {
+          processDevices(store, logger, iosBridge, devices, 'emulator');
+        }),
+      ],
+    );
+  }
+  return promArray;
+}
+
+async function queryDevices(
+  store: Store,
+  logger: Logger,
+  iosBridge: IOSBridge,
+): Promise<any> {
+  const isXcodeInstalled = await iosUtil.isXcodeDetected();
+  return Promise.all(
+    getAllPromisesForQueryingDevices(
+      store,
+      logger,
+      iosBridge,
+      isXcodeInstalled,
     ),
-  ]);
+  );
 }
 
 function processDevices(
   store: Store,
   logger: Logger,
+  iosBridge: IOSBridge,
   activeDevices: IOSDeviceParams[],
   type: 'physical' | 'emulator',
 ) {
@@ -109,7 +150,7 @@ function processDevices(
         (device) =>
           device instanceof IOSDevice &&
           device.deviceType === type &&
-          !device.isArchived,
+          device.connected.get(),
       )
       .map((device) => device.serial),
   );
@@ -118,14 +159,19 @@ function processDevices(
     if (currentDeviceIDs.has(udid)) {
       currentDeviceIDs.delete(udid);
     } else {
+      // clean up offline device
+      destroyDevice(store, logger, udid);
       logger.track('usage', 'register-device', {
         os: 'iOS',
         type: type,
         name: name,
         serial: udid,
       });
-      const iOSDevice = new IOSDevice(udid, type, name);
-      iOSDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
+      const iOSDevice = new IOSDevice(iosBridge, udid, type, name);
+      iOSDevice.loadDevicePlugins(
+        store.getState().plugins.devicePlugins,
+        store.getState().connections.enabledDevicePlugins,
+      );
       store.dispatch({
         type: 'REGISTER_DEVICE',
         payload: iOSDevice,
@@ -139,15 +185,12 @@ function processDevices(
     }
   }
 
-  if (currentDeviceIDs.size > 0) {
-    currentDeviceIDs.forEach((id) =>
-      logger.track('usage', 'unregister-device', {os: 'iOS', serial: id}),
-    );
-    store.dispatch({
-      type: 'UNREGISTER_DEVICES',
-      payload: currentDeviceIDs,
-    });
-  }
+  currentDeviceIDs.forEach((id) => {
+    const device = store
+      .getState()
+      .connections.devices.find((device) => device.serial === id);
+    device?.disconnect();
+  });
 }
 
 function getDeviceSetPath() {
@@ -157,6 +200,7 @@ function getDeviceSetPath() {
 }
 
 export function getSimulators(
+  store: Store,
   bootedOnly: boolean,
 ): Promise<Array<IOSDeviceParams>> {
   return promisify(execFile)(
@@ -182,40 +226,63 @@ export function getSimulators(
           } as IOSDeviceParams;
         });
     })
-    .catch((e) => {
-      console.error(e);
+    .catch((e: Error) => {
+      console.warn('Failed to query simulators:', e);
+      if (e.message.includes('Xcode license agreements')) {
+        store.dispatch(
+          addErrorNotification(
+            'Xcode license requires approval',
+            'The Xcode license agreement has changed. You need to either open Xcode and agree to the terms or run `sudo xcodebuild -license` in a Terminal to allow simulators to work with Flipper.',
+          ),
+        );
+      }
       return Promise.resolve([]);
     });
 }
 
-export function launchSimulator(udid: string): Promise<any> {
-  return promisify(execFile)(
+export async function launchSimulator(udid: string): Promise<any> {
+  await promisify(execFile)(
     'xcrun',
     ['simctl', ...getDeviceSetPath(), 'boot', udid],
     {encoding: 'utf8'},
   );
+  await promisify(execFile)('open', ['-a', 'simulator']);
 }
 
-function getActiveDevices(idbPath: string): Promise<Array<IOSDeviceParams>> {
-  return iosUtil.targets(idbPath).catch((e) => {
-    console.error(e.message);
+function getActiveDevices(
+  idbPath: string,
+  isPhysicalDeviceEnabled: boolean,
+): Promise<Array<IOSDeviceParams>> {
+  return iosUtil.targets(idbPath, isPhysicalDeviceEnabled).catch((e) => {
+    console.error('Failed to get active iOS devices:', e.message);
     return [];
   });
 }
 
-function queryDevicesForever(store: Store, logger: Logger) {
-  return queryDevices(store, logger)
+function queryDevicesForever(
+  store: Store,
+  logger: Logger,
+  iosBridge: IOSBridge,
+) {
+  return queryDevices(store, logger, iosBridge)
     .then(() => {
       // It's important to schedule the next check AFTER the current one has completed
       // to avoid simultaneous queries which can cause multiple user input prompts.
-      setTimeout(() => queryDevicesForever(store, logger), 3000);
+      setTimeout(() => queryDevicesForever(store, logger, iosBridge), 3000);
     })
     .catch((err) => {
-      console.error(err);
+      console.warn('Failed to continuously query devices:', err);
     });
 }
 
+export function parseXcodeFromCoreSimPath(
+  line: string,
+): RegExpMatchArray | null {
+  return line.match(/\/[\/\w@)(\-\+]*\/Xcode[^/]*\.app\/Contents\/Developer/);
+}
+
 let xcodeVersionMismatchFound = false;
+
 async function checkXcodeVersionMismatch(store: Store) {
   if (xcodeVersionMismatchFound) {
     return;
@@ -225,9 +292,7 @@ async function checkXcodeVersionMismatch(store: Store) {
     xcodeCLIVersion = xcodeCLIVersion.trim();
     const {stdout} = await exec('ps aux | grep CoreSimulator');
     for (const line of stdout.split('\n')) {
-      const match = line.match(
-        /\/Applications\/Xcode[^/]*\.app\/Contents\/Developer/,
-      );
+      const match = parseXcodeFromCoreSimPath(line);
       const runningVersion = match && match.length > 0 ? match[0].trim() : null;
       if (runningVersion && runningVersion !== xcodeCLIVersion) {
         const errorMessage = `Xcode version mismatch: Simulator is running from "${runningVersion}" while Xcode CLI is "${xcodeCLIVersion}". Running "xcode-select --switch ${runningVersion}" can fix this. For example: "sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"`;
@@ -239,44 +304,22 @@ async function checkXcodeVersionMismatch(store: Store) {
       }
     }
   } catch (e) {
-    console.error(e);
+    console.error('Failed to determine Xcode version:', e);
   }
-}
-async function isXcodeDetected(): Promise<boolean> {
-  return exec('xcode-select -p')
-    .then((_) => true)
-    .catch((_) => false);
-}
-
-export async function getActiveDevicesAndSimulators(
-  store: Store,
-): Promise<Array<IOSDevice>> {
-  const activeDevices: Array<Array<IOSDeviceParams>> = await Promise.all([
-    getSimulators(true),
-    getActiveDevices(store.getState().settingsState.idbPath),
-  ]);
-  const allDevices = activeDevices[0].concat(activeDevices[1]);
-  return allDevices.map((device) => {
-    const {udid, type, name} = device;
-    return new IOSDevice(udid, type, name);
-  });
 }
 
 export default (store: Store, logger: Logger) => {
-  // monitoring iOS devices only available on MacOS.
-  if (process.platform !== 'darwin') {
-    return;
-  }
   if (!store.getState().settingsState.enableIOS) {
     return;
   }
-  isXcodeDetected().then((isDetected) => {
+  iosUtil.isXcodeDetected().then((isDetected) => {
     store.dispatch(setXcodeDetected(isDetected));
-    if (isDetected) {
-      if (store.getState().settingsState.enablePhysicalIOS) {
-        startDevicePortForwarders();
-      }
-      return queryDevicesForever(store, logger);
+    if (store.getState().settingsState.enablePhysicalIOS) {
+      startDevicePortForwarders();
     }
+    return makeIOSBridge(
+      store.getState().settingsState.idbPath,
+      isDetected,
+    ).then((iosBridge) => queryDevicesForever(store, logger, iosBridge));
   });
 };

@@ -20,6 +20,7 @@ android {
         targetSdkVersion rootProject.targetSdkVersion
         buildConfigField "boolean", "IS_INTERNAL_BUILD", 'true'
         buildConfigField "boolean", "IS_ASAN_BUILD", 'false'
+        buildConfigField "boolean", "LOAD_FLIPPER_EXPLICIT", 'false'
 
         ndk {
             abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
@@ -27,7 +28,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_TOOLCHAIN=clang', '-DANDROID_STL=c++_static'
+                arguments '-DANDROID_TOOLCHAIN=clang', '-DANDROID_STL=c++_shared'
                 targets 'flipper', 'event_shared', 'event_extra_shared', 'event_core_shared'
             }
         }
@@ -35,11 +36,6 @@ android {
 
     lintOptions {
         abortOnError false
-    }
-
-    configurations {
-        extractHeaders
-        extractJNI
     }
 
     sourceSets {
@@ -50,6 +46,14 @@ android {
         }
     }
 
+    buildFeatures {
+        prefab true
+    }
+
+    packagingOptions {
+        exclude("**/libfbjni.so")
+        exclude("**/libc++_shared.so")
+    }
 
     externalNativeBuild {
         cmake {
@@ -59,9 +63,7 @@ android {
 
     dependencies {
         compileOnly deps.proguardAnnotations
-        implementation 'com.facebook.fbjni:fbjni:0.0.2'
-        extractHeaders 'com.facebook.fbjni:fbjni:0.0.2:headers'
-        extractJNI 'com.facebook.fbjni:fbjni:0.0.2'
+        implementation deps.fbjni
         implementation deps.soloader
         implementation deps.jsr305
         implementation deps.supportAppCompat
@@ -73,52 +75,9 @@ android {
         testImplementation deps.testRules
         testImplementation deps.hamcrest
         testImplementation deps.junit
-
-        api 'com.parse.bolts:bolts-tasks:1.4.0'
-        api 'com.parse.bolts:bolts-applinks:1.4.0'
     }
 }
 
 preBuild.dependsOn(tasks.getByPath(':third-party:prepare'))
 
-apply from: rootProject.file('gradle/release.gradle')
-
-task sourcesJar(type: Jar) {
-    from android.sourceSets.main.java.srcDirs
-    classifier = 'sources'
-}
-
-artifacts.add('archives', sourcesJar)
-
-task extractAARHeaders {
-    doLast {
-        configurations.extractHeaders.files.each {
-            def file = it.absoluteFile
-            copy {
-                from zipTree(file)
-                into "$buildDir/$file.name"
-                include "**/*.h"
-            }
-        }
-    }
-}
-
-task extractJNIFiles {
-    doLast {
-        configurations.extractJNI.files.each {
-            def file = it.absoluteFile
-            copy {
-                from zipTree(file)
-                into "$buildDir/$file.name"
-                include "jni/**/*"
-            }
-        }
-    }
-}
-
-tasks.whenTaskAdded { task ->
-    if (task.name.contains('externalNativeBuild')) {
-        task.dependsOn(extractAARHeaders)
-        task.dependsOn(extractJNIFiles)
-    }
-}
+apply plugin: 'com.vanniktech.maven.publish'

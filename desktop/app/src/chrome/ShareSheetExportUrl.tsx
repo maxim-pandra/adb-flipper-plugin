@@ -7,15 +7,7 @@
  * @format
  */
 
-import {
-  FlexColumn,
-  Button,
-  styled,
-  Text,
-  FlexRow,
-  Spacer,
-  Input,
-} from 'flipper';
+import {FlexColumn, Button, styled, Text, FlexRow, Spacer, Input} from '../ui';
 import React, {Component} from 'react';
 import {ReactReduxContext} from 'react-redux';
 import {
@@ -24,7 +16,7 @@ import {
   setExportURL,
 } from '../reducers/application';
 import {Logger} from '../fb-interfaces/Logger';
-import {Idler} from '../utils/Idler';
+import {IdlerImpl} from '../utils/Idler';
 import {
   shareFlipperData,
   DataExportResult,
@@ -103,7 +95,7 @@ export default class ShareSheetExportUrl extends Component<Props, State> {
     return this.context.store;
   }
 
-  idler = new Idler();
+  idler = new IdlerImpl();
 
   dispatchAndUpdateToolBarStatus(msg: string) {
     this.store.dispatch(

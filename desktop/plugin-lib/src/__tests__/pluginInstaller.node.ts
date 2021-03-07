@@ -7,89 +7,206 @@
  * @format
  */
 
-import mockfs from 'mock-fs';
-import fs from 'fs-extra';
 import path from 'path';
-import {consoleMock} from 'flipper-test-utils';
-import {finishPendingPluginInstallations} from '../pluginInstaller';
 import {
-  pluginPendingInstallationDir,
+  getInstalledPlugins,
+  cleanupOldInstalledPluginVersions,
+  moveInstalledPluginsFromLegacyDir,
+} from '../pluginInstaller';
+import {
+  legacyPluginInstallationDir,
   pluginInstallationDir,
 } from '../pluginPaths';
+import fs from 'fs-extra';
+import mockfs from 'mock-fs';
+import FileSystem from 'mock-fs/lib/filesystem';
+import {normalizePath} from 'flipper-test-utils';
+
+function createMockPackageJsonContent(name: string, version: string) {
+  return `
+    {
+      "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
+      "name": "${name}",
+      "version": "${version}",
+      "main": "dist/bundle.js"
+    }
+`;
+}
+
+const installedPluginFiles: FileSystem.DirectoryItems = {
+  [pluginInstallationDir]: {
+    'flipper-plugin-test1': {
+      '1.2.0': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test1',
+          '1.2.0',
+        ),
+      },
+      '11.2.0': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test1',
+          '11.2.0',
+        ),
+      },
+    },
+    'flipper-plugin-test2': {
+      '0.3.0': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test2',
+          '0.3.0',
+        ),
+      },
+      '0.2.0': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test2',
+          '0.2.0',
+        ),
+      },
+      '0.1.0': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test2',
+          '0.1.0',
+        ),
+      },
+    },
+    'flipper-plugin-test3': {
+      '2.0.0-beta.1': {
+        'package.json': createMockPackageJsonContent(
+          'flipper-plugin-test3',
+          '2.0.0-beta.1',
+        ),
+      },
+    },
+  },
+  [legacyPluginInstallationDir]: {
+    'flipper-plugin-test4': {
+      'package.json': createMockPackageJsonContent(
+        'flipper-plugin-test4',
+        '1.0.0',
+      ),
+    },
+    'flipper-plugin-test5': {
+      'package.json': createMockPackageJsonContent(
+        'flipper-plugin-test5',
+        '0.0.1',
+      ),
+    },
+  },
+};
+
+const fileContent = new Map<string, string>();
+
+collectFileContent('', installedPluginFiles, fileContent);
+
+function collectFileContent(
+  cur: string,
+  dirs: FileSystem.DirectoryItems,
+  files: Map<string, string>,
+) {
+  for (const entry of Object.entries(dirs)) {
+    const next = path.join(cur, entry[0]);
+    if (typeof entry[1] === 'string') {
+      files.set(normalizePath(next), entry[1]);
+    } else if (typeof entry[1] === 'function') {
+      throw new Error('Not supported');
+    } else if (Buffer.isBuffer(entry[1])) {
+      throw new Error('Not supported');
+    } else {
+      collectFileContent(next, entry[1], files);
+    }
+  }
+}
 
 describe('pluginInstaller', () => {
-  const realConsole = global.console;
-  global.console = consoleMock as any;
-
-  afterAll(() => {
-    global.console = realConsole;
+  let readJson: any;
+  beforeEach(() => {
+    mockfs(installedPluginFiles);
+    readJson = fs.readJson;
+    fs.readJson = (file: string) => {
+      const content = fileContent.get(normalizePath(file));
+      if (content) {
+        return Promise.resolve(JSON.parse(content));
+      } else {
+        return Promise.resolve(undefined);
+      }
+    };
   });
-
-  beforeEach(() => {});
 
   afterEach(() => {
     mockfs.restore();
+    fs.readJson = readJson;
   });
 
-  test('finish pending plugin installations', async () => {
-    mockfs({
-      [pluginPendingInstallationDir]: {
-        'flipper-plugin-test1': {
-          '1.2.0': {
-            'index.ts': '',
-            'package.json': '',
-          },
-        },
-        'flipper-plugin-test2': {
-          '0.3.0': {
-            'index.js': '',
-            '0.3.0.js': '',
-            'package.json': '',
-          },
-          '0.2.0': {
-            'index.js': '',
-            '0.2.0.js': '',
-            'package.json': '',
-          },
-        },
-      },
-    });
+  test('getInstalledPlugins', async () => {
+    const plugins = await getInstalledPlugins();
+    expect(plugins).toHaveLength(3);
+    expect(plugins.map((p) => p.version).sort()).toEqual([
+      '0.3.0',
+      '11.2.0',
+      '2.0.0-beta.1',
+    ]);
+  });
 
-    await finishPendingPluginInstallations();
+  test('getInstalledPlugins when no plugins installed', async () => {
+    await fs.remove(pluginInstallationDir);
+    const plugins = await getInstalledPlugins();
+    expect(plugins).toHaveLength(0);
+  });
 
-    expect(await fs.readdir(pluginInstallationDir)).toMatchInlineSnapshot(`
-      Array [
-        ".watchmanconfig",
-        "flipper-plugin-test1",
-        "flipper-plugin-test2",
-      ]
-    `);
-
+  test('moveInstalledPluginsFromLegacyDir', async () => {
+    await moveInstalledPluginsFromLegacyDir();
     expect(
-      await fs.readdir(
-        path.join(pluginInstallationDir, 'flipper-plugin-test1'),
+      fs.pathExistsSync(
+        path.join(
+          pluginInstallationDir,
+          'flipper-plugin-test4',
+          '1.0.0',
+          'package.json',
+        ),
       ),
-    ).toMatchInlineSnapshot(`
-      Array [
-        "index.ts",
-        "package.json",
-      ]
-    `);
-
+    ).toBeTruthy();
     expect(
-      await fs.readdir(
-        path.join(pluginInstallationDir, 'flipper-plugin-test2'),
+      fs.pathExistsSync(
+        path.join(
+          pluginInstallationDir,
+          'flipper-plugin-test5',
+          '0.0.1',
+          'package.json',
+        ),
       ),
-    ).toMatchInlineSnapshot(`
-      Array [
-        "0.3.0.js",
-        "index.js",
-        "package.json",
-      ]
-    `);
+    ).toBeTruthy();
+    expect(fs.pathExistsSync(legacyPluginInstallationDir)).toBeFalsy();
+  });
 
-    expect(
-      await fs.readdir(pluginPendingInstallationDir),
-    ).toMatchInlineSnapshot(`Array []`);
+  test('cleanupOldInstalledPluginVersions(1)', async () => {
+    await cleanupOldInstalledPluginVersions(1);
+    const subdirs1 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test1'),
+    );
+    const subdirs2 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test2'),
+    );
+    const subdirs3 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test3'),
+    );
+    expect(subdirs1.sort()).toEqual(['11.2.0']);
+    expect(subdirs2.sort()).toEqual(['0.3.0']);
+    expect(subdirs3.sort()).toEqual(['2.0.0-beta.1']);
+  });
+
+  test('cleanupOldInstalledPluginVersions(2)', async () => {
+    await cleanupOldInstalledPluginVersions(2);
+    const subdirs1 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test1'),
+    );
+    const subdirs2 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test2'),
+    );
+    const subdirs3 = await fs.readdir(
+      path.join(pluginInstallationDir, 'flipper-plugin-test3'),
+    );
+    expect(subdirs1.sort()).toEqual(['1.2.0', '11.2.0']);
+    expect(subdirs2.sort()).toEqual(['0.2.0', '0.3.0']);
+    expect(subdirs3.sort()).toEqual(['2.0.0-beta.1']);
   });
 });

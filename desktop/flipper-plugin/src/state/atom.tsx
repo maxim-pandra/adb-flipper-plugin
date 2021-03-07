@@ -7,9 +7,11 @@
  * @format
  */
 
-import {produce, Draft} from 'immer';
+import {produce, Draft, enableMapSet} from 'immer';
 import {useState, useEffect} from 'react';
 import {getCurrentPluginInstance} from '../plugin/PluginBase';
+
+enableMapSet();
 
 export type Atom<T> = {
   get(): T;
@@ -71,16 +73,7 @@ export function createState<T>(
 ): Atom<T> {
   const atom = new AtomValue<T>(initialValue);
   if (getCurrentPluginInstance() && options.persist) {
-    const {initialStates, rootStates} = getCurrentPluginInstance()!;
-    if (initialStates) {
-      if (options.persist in initialStates) {
-        atom.set(initialStates[options.persist]);
-      } else {
-        console.warn(
-          `Tried to initialize plugin with existing data, however data for "${options.persist}" is missing. Was the export created with a different Flipper version?`,
-        );
-      }
-    }
+    const {rootStates} = getCurrentPluginInstance()!;
     if (rootStates[options.persist]) {
       throw new Error(
         `Some other state is already persisting with key "${options.persist}"`,
@@ -91,9 +84,16 @@ export function createState<T>(
   return atom;
 }
 
-export function useValue<T>(atom: Atom<T>): T {
-  const [localValue, setLocalValue] = useState<T>(atom.get());
+export function useValue<T>(atom: Atom<T>): T;
+export function useValue<T>(atom: Atom<T> | undefined, defaultValue: T): T;
+export function useValue<T>(atom: Atom<T> | undefined, defaultValue?: T): T {
+  const [localValue, setLocalValue] = useState<T>(
+    atom ? atom.get() : defaultValue!,
+  );
   useEffect(() => {
+    if (!atom) {
+      return;
+    }
     // atom might have changed between mounting and effect setup
     // in that case, this will cause a re-render, otherwise not
     setLocalValue(atom.get());

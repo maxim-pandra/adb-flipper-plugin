@@ -1,10 +1,12 @@
 ---
 id: react-native-ios
 title: Manually set up your React Native iOS App
-sidebar_label: React Native for iOS
+sidebar_label: Manual iOS Setup
 ---
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import Link from '@docusaurus/Link';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 These instructions are aimed at people manually adding Flipper to a React Native 0.62+ app.
 This should only be necessary if you have an existing app that cannot be upgraded with the
@@ -30,7 +32,7 @@ target 'your-app-name' do
   #
   # Note that if you have use_frameworks! enabled, Flipper will not work and
   # you should disable these next few lines.
-  use_flipper!('Flipper' => '0.58.0') # should match the version of your Flipper client app
+  use_flipper!({'Flipper' => '0.58.0'}) # should match the version of your Flipper client app
   post_install do |installer|
     flipper_post_install(installer)
   end
@@ -47,7 +49,7 @@ In 0.62, the setup includes a bit more code (which was moved to a helper in 0.63
 platform :ios, '9.0'
 
 def flipper_pods()
-  flipperkit_version = '0.58.0' # should match the version of your Flipper client app
+  flipperkit_version = '0.79.1' # should match the version of your Flipper client app
   pod 'FlipperKit', '~>' + flipperkit_version, :configuration => 'Debug'
   pod 'FlipperKit/FlipperKitLayoutPlugin', '~>' + flipperkit_version, :configuration => 'Debug'
   pod 'FlipperKit/SKIOSNetworkPlugin', '~>' + flipperkit_version, :configuration => 'Debug'
@@ -102,9 +104,8 @@ The code below enables the following integrations:
 - Shared Preferences
 - Crash Reporter
 
-<!--DOCUSAURUS_CODE_TABS-->
-
-<!--Objective-C-->
+<Tabs defaultValue="ios" values={[{ label: 'iOS', value: 'ios'}, { label: 'Swift', value: 'swift'}]}>
+<TabItem value="ios">
 
 ```objective-c
 ...
@@ -145,7 +146,8 @@ The code below enables the following integrations:
 @end
 ```
 
-<!--Swift-->
+</TabItem>
+<TabItem value="swift">
 
 ```swift
 ...
@@ -185,7 +187,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 ```
 
-<!--END_DOCUSAURUS_CODE_TABS-->
+</TabItem>
+</Tabs>
 
 Lastly, open the Flipper desktop app, and run `yarn ios` in your terminal.
 

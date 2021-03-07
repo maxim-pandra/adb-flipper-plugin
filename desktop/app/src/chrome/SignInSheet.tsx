@@ -7,17 +7,7 @@
  * @format
  */
 
-import {
-  FlexColumn,
-  Button,
-  styled,
-  Text,
-  FlexRow,
-  Spacer,
-  Input,
-  Link,
-  colors,
-} from 'flipper';
+import {FlexColumn, Button, styled, Text, Input, Link, colors} from '../ui';
 import React, {Component} from 'react';
 import {writeKeychain, getUser} from '../fb-stubs/user';
 import {login} from '../reducers/user';
@@ -26,11 +16,8 @@ import {State as Store} from '../reducers';
 import ContextMenu from '../ui/components/ContextMenu';
 import {clipboard} from 'electron';
 import {reportPlatformFailures} from '../utils/metrics';
-
-const Container = styled(FlexColumn)({
-  padding: 20,
-  width: 500,
-});
+import {Modal} from 'antd';
+import {TrackingScope} from 'flipper-plugin';
 
 const Title = styled(Text)({
   marginBottom: 6,
@@ -128,13 +115,32 @@ class SignInSheet extends Component<Props, State> {
     this.setState({token: '', error: ''});
   };
 
-  render() {
+  renderSandyContainer(
+    contents: React.ReactElement,
+    footer: React.ReactElement,
+  ) {
     return (
-      <Container>
+      <TrackingScope scope="logindialog">
+        <Modal
+          visible
+          centered
+          onCancel={this.props.onHide}
+          width={570}
+          title="Login"
+          footer={footer}>
+          <FlexColumn>{contents}</FlexColumn>
+        </Modal>
+      </TrackingScope>
+    );
+  }
+
+  render() {
+    const content = (
+      <>
         <Title>You are not currently logged in to Facebook.</Title>
         <InfoText>
           To log in you will need to{' '}
-          <Link href="https://our.internmc.facebook.com/intern/oauth/nuclide/">
+          <Link href="https://www.internalfb.com/intern/oauth/nuclide/">
             open this page
           </Link>
           , copy the Nuclide access token you find on that page to clipboard,
@@ -150,27 +156,31 @@ class SignInSheet extends Component<Props, State> {
             onChange={(e) => this.setState({token: e.target.value})}
           />
         </ContextMenu>
-        <br />
         {this.state.error && (
-          <InfoText color={colors.red}>
-            <strong>Error:</strong>&nbsp;{this.state.error}
-          </InfoText>
+          <>
+            <br />
+            <InfoText color={colors.red}>
+              <strong>Error:</strong>&nbsp;{this.state.error}
+            </InfoText>
+          </>
         )}
-        <br />
-        <FlexRow>
-          <Spacer />
-          <Button compact padded onClick={this.props.onHide}>
-            Cancel
-          </Button>
-          <Button compact padded onClick={this.reset}>
-            Reset
-          </Button>
-          <Button type="primary" compact padded onClick={this.signIn}>
-            Sign In
-          </Button>
-        </FlexRow>
-      </Container>
+      </>
     );
+    const footer = (
+      <>
+        <Button compact padded onClick={this.props.onHide}>
+          Cancel
+        </Button>
+        <Button compact padded onClick={this.reset}>
+          Reset
+        </Button>
+        <Button type="primary" compact padded onClick={this.signIn}>
+          Sign In
+        </Button>
+      </>
+    );
+
+    return this.renderSandyContainer(content, footer);
   }
 }
 

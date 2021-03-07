@@ -8,7 +8,7 @@
  */
 
 import React, {cloneElement} from 'react';
-import {styled, FlexRow, FlexColumn} from 'flipper';
+import {styled, FlexRow, FlexColumn} from '../ui';
 import {Modal, Button, Image, Checkbox, Space, Typography} from 'antd';
 import {
   RocketOutlined,
@@ -16,16 +16,14 @@ import {
   CodeOutlined,
   BugOutlined,
 } from '@ant-design/icons';
-import {theme} from './theme';
+import {Layout, theme, Tracked, TrackingScope} from 'flipper-plugin';
 
 const {Text, Title} = Typography;
 
 import constants from '../fb-stubs/constants';
 import isProduction from '../utils/isProduction';
-import isHeadless from '../utils/isHeadless';
-const {shell, remote} = !isHeadless()
-  ? require('electron')
-  : {shell: undefined, remote: undefined};
+import {getAppVersion} from '../utils/info';
+import {shell} from 'electron';
 
 const RowContainer = styled(FlexRow)({
   alignItems: 'flex-start',
@@ -45,19 +43,21 @@ function Row(props: {
   onClick?: () => void;
 }) {
   return (
-    <RowContainer onClick={props.onClick}>
-      <Space size="middle">
-        {cloneElement(props.icon, {
-          style: {fontSize: 36, color: theme.primaryColor},
-        })}
-        <FlexColumn>
-          <Title level={3} style={{color: theme.primaryColor}}>
-            {props.title}
-          </Title>
-          <Text type="secondary">{props.subtitle}</Text>
-        </FlexColumn>
-      </Space>
-    </RowContainer>
+    <Tracked action={props.title}>
+      <RowContainer onClick={props.onClick}>
+        <Space size="middle">
+          {cloneElement(props.icon, {
+            style: {fontSize: 36, color: theme.primaryColor},
+          })}
+          <FlexColumn>
+            <Title level={3} style={{color: theme.primaryColor}}>
+              {props.title}
+            </Title>
+            <Text type="secondary">{props.subtitle}</Text>
+          </FlexColumn>
+        </Space>
+      </RowContainer>
+    </Tracked>
   );
 }
 
@@ -114,16 +114,38 @@ export default function WelcomeScreen({
         />
       }
       onCancel={onClose}>
+      <WelcomeScreenContent />
+    </Modal>
+  );
+}
+
+export function WelcomeScreenStaticView() {
+  return (
+    <Layout.Container
+      center
+      style={{
+        justifyContent: 'center',
+      }}
+      pad
+      grow>
+      <Layout.Container width={400} center>
+        <WelcomeScreenContent />
+      </Layout.Container>
+    </Layout.Container>
+  );
+}
+
+function WelcomeScreenContent() {
+  return (
+    <TrackingScope scope="welcomescreen">
       <Space
         direction="vertical"
         size="middle"
-        style={{width: '100%', padding: '32px', alignItems: 'center'}}>
+        style={{width: '100%', padding: '0 32px 32px', alignItems: 'center'}}>
         <Image width={125} height={125} src="./icon.png" preview={false} />
         <Title level={1}>Welcome to Flipper</Title>
         <Text style={{color: theme.textColorPlaceholder}}>
-          {isProduction() && remote
-            ? `Version ${remote.app.getVersion()}`
-            : 'Development Mode'}
+          {isProduction() ? `Version ${getAppVersion()}` : 'Development Mode'}
         </Text>
       </Space>
       <Space direction="vertical" size="large" style={{width: '100%'}}>
@@ -154,6 +176,6 @@ export default function WelcomeScreen({
           onClick={openExternal(constants.FEEDBACK_GROUP_LINK)}
         />
       </Space>
-    </Modal>
+    </TrackingScope>
   );
 }

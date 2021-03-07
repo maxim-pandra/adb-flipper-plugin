@@ -54,7 +54,7 @@ const deviceClientCertFile = 'device.crt';
 const caSubject = '/C=US/ST=CA/L=Menlo Park/O=Sonar/CN=SonarCA';
 const serverSubject = '/C=US/ST=CA/L=Menlo Park/O=Sonar/CN=localhost';
 const minCertExpiryWindowSeconds = 24 * 60 * 60;
-const allowedAppNameRegex = /^[\w._-]+$/;
+const allowedAppNameRegex = /^[\w.-]+$/;
 const logTag = 'CertificateProvider';
 /*
  * RFC2253 specifies the unamiguous x509 subject format.
@@ -377,7 +377,7 @@ export default class CertificateProvider {
               return {id: device.id, ...result, error: null};
             })
             .catch((e) => {
-              console.error(
+              console.warn(
                 `Unable to check for matching CSR in ${device.id}:${appName}`,
                 logTag,
               );
@@ -394,17 +394,17 @@ export default class CertificateProvider {
             const foundCsrs = devices
               .filter((d) => d.foundCsr !== null)
               .map((d) => (d.foundCsr ? encodeURI(d.foundCsr) : 'null'));
-            console.error(`Looking for CSR (url encoded):
-            
+            console.warn(`Looking for CSR (url encoded):
+
             ${encodeURI(this.santitizeString(csr))}
-            
+
             Found these:
-            
+
             ${foundCsrs.join('\n\n')}`);
             throw new Error(`No matching device found for app: ${appName}`);
           }
           if (matchingIds.length > 1) {
-            console.error(
+            console.warn(
               new Error('More than one matching device found for CSR'),
               csr,
             );
@@ -425,7 +425,10 @@ export default class CertificateProvider {
       return Promise.resolve(matches[1]);
     }
     return iosUtil
-      .targets(this.store.getState().settingsState.idbPath)
+      .targets(
+        this.store.getState().settingsState.idbPath,
+        this.store.getState().settingsState.enablePhysicalIOS,
+      )
       .then((targets) => {
         if (targets.length === 0) {
           throw new Error('No iOS devices found');

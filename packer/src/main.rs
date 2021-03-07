@@ -69,7 +69,7 @@ fn pack(
     let packtype_paths = pack_list
         .0
         .get(&platform)
-        .ok_or_else(|| error::Error::MissingPlatformDefinition(platform))?;
+        .ok_or(error::Error::MissingPlatformDefinition(platform))?;
     let res = packtype_paths
         .into_par_iter()
         .map(|(&pack_type, pack_files)| {
@@ -105,7 +105,6 @@ fn pack_platform(
 ) -> Result<()> {
     let base_dir = match platform {
         Platform::Mac => path::Path::new(dist_dir).join("mac"),
-        // TODO: Verify this.
         Platform::Linux => path::Path::new(dist_dir).join("linux-unpacked"),
         Platform::Windows => path::Path::new(dist_dir).join("win-unpacked"),
     };
@@ -133,7 +132,7 @@ fn sha256_digest<R: io::Read>(mut reader: &mut R) -> Result<HashSum> {
 
     let mut sha256 = Sha256::new();
     std::io::copy(&mut reader, &mut sha256)?;
-    let hash = sha256.result();
+    let hash = sha256.finalize();
 
     Ok(HashSum(data_encoding::HEXLOWER.encode(&hash)))
 }

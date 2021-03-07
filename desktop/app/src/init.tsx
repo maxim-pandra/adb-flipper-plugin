@@ -13,7 +13,7 @@ import ReactDOM from 'react-dom';
 import ContextMenuProvider from './ui/components/ContextMenuProvider';
 import GK from './fb-stubs/GK';
 import {init as initLogger} from './fb-stubs/Logger';
-import App from './fb-stubs/App';
+import {SandyApp} from './sandy-chrome/SandyApp';
 import setupPrefetcher from './fb-stubs/Prefetcher';
 import {persistStore} from 'redux-persist';
 import {Store} from './reducers/index';
@@ -25,16 +25,30 @@ import {setPersistor} from './utils/persistor';
 import React from 'react';
 import path from 'path';
 import {store} from './store';
-import {registerRecordingHooks} from './utils/pluginStateRecorder';
-import {cache} from 'emotion';
-import {CacheProvider} from '@emotion/core';
+import {cache} from '@emotion/css';
+import {CacheProvider} from '@emotion/react';
 import {enableMapSet} from 'immer';
 import os from 'os';
-import QuickPerformanceLogger, {FLIPPER_QPL_EVENTS} from './fb-stubs/QPL';
 import {PopoverProvider} from './ui/components/PopoverProvider';
 import {initializeFlipperLibImplementation} from './utils/flipperLibImplementation';
 import {enableConsoleHook} from './chrome/ConsoleLogs';
 import {sideEffect} from './utils/sideEffect';
+import {
+  _NuxManagerContext,
+  _createNuxManager,
+  _setGlobalInteractionReporter,
+  Logger,
+  _LoggerContext,
+  Layout,
+  theme,
+} from 'flipper-plugin';
+import isProduction from './utils/isProduction';
+import {Button, Input, Result, Typography} from 'antd';
+import constants from './fb-stubs/constants';
+import styled from '@emotion/styled';
+import {CopyOutlined} from '@ant-design/icons';
+import {clipboard} from 'electron/common';
+import {getVersionString} from './utils/versionString';
 
 if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   // By default Node.JS has its internal certificate storage and doesn't use
@@ -45,30 +59,103 @@ if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   global.electronRequire('mac-ca');
 }
 
-const [s, ns] = process.hrtime();
-const launchTime = s * 1e3 + ns / 1e6;
-
 const logger = initLogger(store);
-
-QuickPerformanceLogger.markerStart(FLIPPER_QPL_EVENTS.STARTUP, 0, launchTime);
 
 enableMapSet();
 
 GK.init();
 
-const AppFrame = () => (
-  <TooltipProvider>
-    <PopoverProvider>
-      <ContextMenuProvider>
+class AppFrame extends React.Component<
+  {logger: Logger},
+  {error: any; errorInfo: any}
+> {
+  state = {error: undefined as any, errorInfo: undefined as any};
+
+  getError() {
+    return this.state.error
+      ? `${
+          this.state.error
+        }\n\nFlipper version: ${getVersionString()}\n\nComponent stack:\n${
+          this.state.errorInfo?.componentStack
+        }\n\nError stacktrace:\n${this.state.error?.stack}`
+      : '';
+  }
+
+  render() {
+    const {logger} = this.props;
+    return this.state.error ? (
+      <Layout.Container grow center pad={80} style={{height: '100%'}}>
+        <Layout.Top style={{maxWidth: 800, height: '100%'}}>
+          <Result
+            status="error"
+            title="Detected a Flipper crash"
+            subTitle={
+              <p>
+                A crash was detected in the Flipper chrome. Filing a{' '}
+                <Typography.Link
+                  href={
+                    constants.IS_PUBLIC_BUILD
+                      ? 'https://github.com/facebook/flipper/issues/new/choose'
+                      : constants.FEEDBACK_GROUP_LINK
+                  }>
+                  bug report
+                </Typography.Link>{' '}
+                would be appreciated! Please include the details below.
+              </p>
+            }
+            extra={[
+              <Button
+                key="copy_error"
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  clipboard.writeText(this.getError());
+                }}>
+                Copy error
+              </Button>,
+              <Button
+                key="retry_error"
+                type="primary"
+                onClick={() => {
+                  this.setState({error: undefined, errorInfo: undefined});
+                }}>
+                Retry
+              </Button>,
+            ]}
+          />
+          <CodeBlock value={this.getError()} readOnly />
+        </Layout.Top>
+      </Layout.Container>
+    ) : (
+      <_LoggerContext.Provider value={logger}>
         <Provider store={store}>
           <CacheProvider value={cache}>
-            <App logger={logger} />
+            <TooltipProvider>
+              <PopoverProvider>
+                <ContextMenuProvider>
+                  <_NuxManagerContext.Provider value={_createNuxManager()}>
+                    <SandyApp />
+                  </_NuxManagerContext.Provider>
+                </ContextMenuProvider>
+              </PopoverProvider>
+            </TooltipProvider>
           </CacheProvider>
         </Provider>
-      </ContextMenuProvider>
-    </PopoverProvider>
-  </TooltipProvider>
-);
+      </_LoggerContext.Provider>
+    );
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error(
+      `Flipper chrome crash: ${error}`,
+      error,
+      '\nComponents: ' + errorInfo?.componentStack,
+    );
+    this.setState({
+      error,
+      errorInfo,
+    });
+  }
+}
 
 function setProcessState(store: Store) {
   const settings = store.getState().settingsState;
@@ -95,9 +182,19 @@ function setProcessState(store: Store) {
 
 function init() {
   initializeFlipperLibImplementation(store, logger);
-  ReactDOM.render(<AppFrame />, document.getElementById('root'));
+  _setGlobalInteractionReporter((r) => {
+    logger.track('usage', 'interaction', r);
+    if (!isProduction()) {
+      const msg = `[interaction] ${r.scope}:${r.action} in ${r.duration}ms`;
+      if (r.success) console.log(msg);
+      else console.error(msg, r.error);
+    }
+  });
+  ReactDOM.render(
+    <AppFrame logger={logger} />,
+    document.getElementById('root'),
+  );
   initLauncherHooks(config(), store);
-  registerRecordingHooks(store);
   enableConsoleHook();
   window.flipperGlobalStoreDispatch = store.dispatch;
 
@@ -105,14 +202,15 @@ function init() {
   sideEffect(
     store,
     {name: 'loadTheme', fireImmediately: true, throttleMs: 500},
-    (state) =>
-      state.settingsState.enableSandy && state.settingsState.darkMode
-        ? 'themes/dark'
-        : 'themes/light',
+    (state) => ({
+      dark: state.settingsState.darkMode,
+    }),
     (theme) => {
       (document.getElementById(
         'flipper-theme-import',
-      ) as HTMLLinkElement).href = `${theme}.css`;
+      ) as HTMLLinkElement).href = `themes/${
+        theme.dark ? 'dark' : 'light'
+      }.css`;
     },
   );
 }
@@ -128,3 +226,10 @@ const persistor = persistStore(store, undefined, () => {
 });
 
 setPersistor(persistor);
+
+const CodeBlock = styled(Input.TextArea)({
+  fontFamily:
+    'SFMono-Regular,Consolas,Liberation Mono,Menlo,Courier,monospace;',
+  fontSize: '0.8em',
+  color: theme.textColorSecondary,
+});

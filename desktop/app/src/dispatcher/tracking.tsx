@@ -7,11 +7,11 @@
  * @format
  */
 
-import {ipcRenderer} from 'electron';
+import {ipcRenderer, remote} from 'electron';
 import {performance} from 'perf_hooks';
 import {EventEmitter} from 'events';
 
-import {Store} from '../reducers/index';
+import {State, Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
 import Client from '../Client';
 import {
@@ -24,7 +24,7 @@ import {
   State as UsageTrackingState,
 } from '../reducers/usageTracking';
 import produce from 'immer';
-import {BaseDevice} from 'flipper';
+import BaseDevice from '../devices/BaseDevice';
 import {deconstructClientId} from '../utils/clientUtils';
 import {getCPUUsage} from 'process';
 
@@ -71,10 +71,13 @@ export default (store: Store, logger: Logger) => {
 
   const oldExitData = loadExitData();
   if (oldExitData) {
+    const isReload = remote.process.pid === oldExitData.pid;
     const timeSinceLastStartup =
       Date.now() - parseInt(oldExitData.lastSeen, 10);
-    logger.track('usage', 'restart', {
+    // console.log(isReload ? 'reload' : 'restart', oldExitData);
+    logger.track('usage', isReload ? 'reload' : 'restart', {
       ...oldExitData,
+      pid: undefined,
       timeSinceLastStartup,
     });
     // create fresh exit data
@@ -118,8 +121,19 @@ export default (store: Store, logger: Logger) => {
     );
   }
 
-  ipcRenderer.on('trackUsage', (_e, ...args: any[]) => {
-    const state = store.getState();
+  ipcRenderer.on('trackUsage', (event, ...args: any[]) => {
+    let state: State;
+    try {
+      state = store.getState();
+    } catch (e) {
+      // if trackUsage is called (indirectly) through a reducer, this will utterly die Flipper. Let's prevent that and log an error instead
+      console.error(
+        'trackUsage triggered indirectly as side effect of a reducer. Event: ',
+        event.type,
+        event,
+      );
+      return;
+    }
     const {
       selectedDevice,
       selectedPlugin,
@@ -142,12 +156,18 @@ export default (store: Store, logger: Logger) => {
       logger.track('usage', TIME_SPENT_EVENT, usageSummary[key], key);
     }
 
-    Object.entries(state.connections.userStarredPlugins).forEach(
-      ([app, plugins]) =>
+    Object.entries(state.connections.enabledPlugins).forEach(
+      ([app, plugins]) => {
+        // TODO: remove "starred-plugns" event in favor of "enabled-plugins" after some transition period
         logger.track('usage', 'starred-plugins', {
-          app: app,
+          app,
           starredPlugins: plugins,
-        }),
+        });
+        logger.track('usage', 'enabled-plugins', {
+          app,
+          enabledPugins: plugins,
+        });
+      },
     );
 
     const bgStats = getPluginBackgroundStats();
@@ -277,6 +297,7 @@ interface ExitData {
   plugin: string;
   app: string;
   cleanExit: boolean;
+  pid: number;
 }
 
 function loadExitData(): ExitData | undefined {
@@ -317,6 +338,7 @@ export function persistExitData(
     plugin: state.selectedPlugin || '',
     app: state.selectedApp ? deconstructClientId(state.selectedApp).app : '',
     cleanExit,
+    pid: remote.process.pid,
   };
   window.localStorage.setItem(
     flipperExitDataKey,

@@ -12,7 +12,7 @@ import Client from '../../Client';
 import {TableBodyRow} from '../../ui/components/table/types';
 import React, {Component, Fragment} from 'react';
 import {connect} from 'react-redux';
-import {Text, ManagedTable, styled, colors, Link, Bordered} from 'flipper';
+import {Text, ManagedTable, styled, colors, Link, Bordered} from '../../ui';
 import StatusIndicator from '../../ui/components/StatusIndicator';
 import {State as Store} from '../../reducers';
 import {DevicePluginDefinition, ClientPluginDefinition} from '../../plugin';
@@ -139,7 +139,7 @@ class PluginDebugger extends Component<Props> {
   getRows(): Array<TableBodyRow> {
     const rows: Array<TableBodyRow> = [];
 
-    const externalPluginPath = (p: any) => (p.isDefault ? 'bundled' : p.entry);
+    const externalPluginPath = (p: any) => (p.isBundled ? 'bundled' : p.entry);
 
     this.props.gatekeepedPlugins.forEach((plugin) =>
       rows.push(

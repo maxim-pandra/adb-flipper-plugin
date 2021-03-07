@@ -24,18 +24,17 @@ import {
   FlexRow,
   colors,
   styled,
-  ArchivedDevice,
   Glyph,
   Label,
   VBox,
   View,
-} from 'flipper';
+} from './ui';
 import {
   StaticView,
   setStaticView,
-  pluginIsStarred,
-  starPlugin,
+  isPluginEnabled,
 } from './reducers/connections';
+import {switchPlugin} from './reducers/pluginManager';
 import React, {PureComponent} from 'react';
 import {connect, ReactReduxContext} from 'react-redux';
 import {setPluginState} from './reducers/pluginStates';
@@ -44,11 +43,20 @@ import {selectPlugin} from './reducers/connections';
 import {State as Store, MiddlewareAPI} from './reducers/index';
 import {activateMenuItems} from './MenuBar';
 import {Message} from './reducers/pluginMessageQueue';
-import {Idler} from './utils/Idler';
+import {IdlerImpl} from './utils/Idler';
 import {processMessageQueue} from './utils/messageQueue';
-import {ToggleButton, SmallText} from './ui';
-import {SandyPluginRenderer} from 'flipper-plugin';
+import {ToggleButton, SmallText, Layout} from './ui';
+import {theme, TrackingScope, _SandyPluginRenderer} from 'flipper-plugin';
 import {isDevicePluginDefinition} from './utils/pluginUtils';
+import {ContentContainer} from './sandy-chrome/ContentContainer';
+import {Alert, Typography} from 'antd';
+import {InstalledPluginDetails} from 'plugin-lib';
+import semver from 'semver';
+import {loadPlugin} from './reducers/pluginManager';
+import {produce} from 'immer';
+import {reportUsage} from './utils/metrics';
+
+const {Text, Link} = Typography;
 
 const Container = styled(FlexColumn)({
   width: 0,
@@ -67,7 +75,6 @@ const Waiting = styled(FlexColumn)({
   width: '100%',
   height: '100%',
   flexGrow: 1,
-  background: colors.light02,
   alignItems: 'center',
   justifyContent: 'center',
   textAlign: 'center',
@@ -95,6 +102,7 @@ const ProgressBarBar = styled.div<{progress: number}>(({progress}) => ({
 
 type OwnProps = {
   logger: Logger;
+  isSandy?: boolean;
 };
 
 type StateFromProps = {
@@ -108,6 +116,7 @@ type StateFromProps = {
   pendingMessages: Message[] | undefined;
   pluginIsEnabled: boolean;
   settingsState: Settings;
+  latestInstalledVersion: InstalledPluginDetails | undefined;
 };
 
 type DispatchFromProps = {
@@ -118,17 +127,24 @@ type DispatchFromProps = {
   }) => any;
   setPluginState: (payload: {pluginKey: string; state: any}) => void;
   setStaticView: (payload: StaticView) => void;
-  starPlugin: typeof starPlugin;
+  enablePlugin: typeof switchPlugin;
+  loadPlugin: typeof loadPlugin;
 };
 
 type Props = StateFromProps & DispatchFromProps & OwnProps;
 
 type State = {
   progress: {current: number; total: number};
+  autoUpdateAlertSuppressed: Set<string>;
 };
 
 class PluginContainer extends PureComponent<Props, State> {
   static contextType = ReactReduxContext;
+
+  constructor(props: Props) {
+    super(props);
+    this.reloadPlugin = this.reloadPlugin.bind(this);
+  }
 
   plugin:
     | FlipperPlugin<any, any, any>
@@ -156,10 +172,13 @@ class PluginContainer extends PureComponent<Props, State> {
     }
   };
 
-  idler?: Idler;
+  idler?: IdlerImpl;
   pluginBeingProcessed: string | null = null;
 
-  state = {progress: {current: 0, total: 0}};
+  state = {
+    progress: {current: 0, total: 0},
+    autoUpdateAlertSuppressed: new Set<string>(),
+  };
 
   get store(): MiddlewareAPI {
     return this.context.store;
@@ -199,7 +218,11 @@ class PluginContainer extends PureComponent<Props, State> {
     if (pluginKey !== this.pluginBeingProcessed) {
       this.pluginBeingProcessed = pluginKey;
       this.cancelCurrentQueue();
-      this.setState({progress: {current: 0, total: 0}});
+      this.setState((state) =>
+        produce(state, (draft) => {
+          draft.progress = {current: 0, total: 0};
+        }),
+      );
       // device plugins don't have connections so no message queues
       if (!activePlugin || isDevicePluginDefinition(activePlugin)) {
         return;
@@ -213,7 +236,7 @@ class PluginContainer extends PureComponent<Props, State> {
         pendingMessages?.length
       ) {
         const start = Date.now();
-        this.idler = new Idler();
+        this.idler = new IdlerImpl();
         processMessageQueue(
           isSandyPlugin(activePlugin)
             ? target.sandyPluginStates.get(activePlugin.id)!
@@ -221,7 +244,11 @@ class PluginContainer extends PureComponent<Props, State> {
           pluginKey,
           this.store,
           (progress) => {
-            this.setState({progress});
+            this.setState((state) =>
+              produce(state, (draft) => {
+                draft.progress = progress;
+              }),
+            );
           },
           this.idler,
         ).then((completed) => {
@@ -288,9 +315,9 @@ class PluginContainer extends PureComponent<Props, State> {
             <ToggleButton
               toggled={false}
               onClick={() => {
-                this.props.starPlugin({
+                this.props.enablePlugin({
                   plugin: activePlugin,
-                  selectedApp: (this.props.target as Client).query.app,
+                  selectedApp: (this.props.target as Client)?.query?.app,
                 });
               }}
               large
@@ -352,6 +379,24 @@ class PluginContainer extends PureComponent<Props, State> {
     );
   }
 
+  reloadPlugin() {
+    const {loadPlugin, latestInstalledVersion} = this.props;
+    if (latestInstalledVersion) {
+      reportUsage(
+        'plugin-auto-update:alert:reloadClicked',
+        {
+          version: latestInstalledVersion.version,
+        },
+        latestInstalledVersion.id,
+      );
+      loadPlugin({
+        plugin: latestInstalledVersion,
+        enable: false,
+        notifyIfFailed: true,
+      });
+    }
+  }
+
   renderPlugin() {
     const {
       pluginState,
@@ -362,12 +407,21 @@ class PluginContainer extends PureComponent<Props, State> {
       isArchivedDevice,
       selectedApp,
       settingsState,
+      isSandy,
+      latestInstalledVersion,
     } = this.props;
     if (!activePlugin || !target || !pluginKey) {
       console.warn(`No selected plugin. Rendering empty!`);
       return this.renderNoPluginActive();
     }
     let pluginElement: null | React.ReactElement<any>;
+    const showUpdateAlert =
+      latestInstalledVersion &&
+      activePlugin &&
+      !this.state.autoUpdateAlertSuppressed.has(
+        `${latestInstalledVersion.name}@${latestInstalledVersion.version}`,
+      ) &&
+      semver.gt(latestInstalledVersion.version, activePlugin.version);
     if (isSandyPlugin(activePlugin)) {
       // Make sure we throw away the container for different pluginKey!
       const instance = target.sandyPluginStates.get(activePlugin.id);
@@ -375,7 +429,9 @@ class PluginContainer extends PureComponent<Props, State> {
         // happens if we selected a plugin that is not enabled on a specific app or not supported on a specific device.
         return this.renderNoPluginActive();
       }
-      pluginElement = <SandyPluginRenderer key={pluginKey} plugin={instance} />;
+      pluginElement = (
+        <_SandyPluginRenderer key={pluginKey} plugin={instance} />
+      );
     } else {
       const props: PluginProps<Object> & {
         key: string;
@@ -427,9 +483,52 @@ class PluginContainer extends PureComponent<Props, State> {
         isArchivedDevice,
         settingsState,
       };
-      pluginElement = React.createElement(activePlugin, props);
+      pluginElement = (
+        <TrackingScope scope={'plugin:' + activePlugin.id}>
+          {React.createElement(activePlugin, props)}
+        </TrackingScope>
+      );
     }
-    return (
+    return isSandy ? (
+      <Layout.Top>
+        <div>
+          {showUpdateAlert && (
+            <Alert
+              message={
+                <Text>
+                  Plugin "{activePlugin.title}" v
+                  {latestInstalledVersion?.version} is downloaded and ready to
+                  install. <Link onClick={this.reloadPlugin}>Reload</Link> to
+                  start using the new version.
+                </Text>
+              }
+              type="info"
+              onClose={() =>
+                this.setState((state) =>
+                  produce(state, (draft) => {
+                    draft.autoUpdateAlertSuppressed.add(
+                      `${latestInstalledVersion?.name}@${latestInstalledVersion?.version}`,
+                    );
+                  }),
+                )
+              }
+              style={{marginBottom: theme.space.large}}
+              showIcon
+              closable
+            />
+          )}
+        </div>
+        <Layout.Right>
+          <ErrorBoundary
+            heading={`Plugin "${
+              activePlugin.title || 'Unknown'
+            }" encountered an error during render`}>
+            <ContentContainer>{pluginElement}</ContentContainer>
+          </ErrorBoundary>
+          <SidebarContainer id="detailsSidebar" />
+        </Layout.Right>
+      </Layout.Top>
+    ) : (
       <React.Fragment>
         <Container key="plugin">
           <ErrorBoundary
@@ -453,10 +552,11 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
       selectedApp,
       clients,
       deepLinkPayload,
-      userStarredPlugins,
+      enabledPlugins,
+      enabledDevicePlugins,
     },
     pluginStates,
-    plugins: {devicePlugins, clientPlugins},
+    plugins: {devicePlugins, clientPlugins, installedPlugins},
     pluginMessageQueue,
     settingsState,
   }) => {
@@ -467,27 +567,29 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
 
     if (selectedPlugin) {
       activePlugin = devicePlugins.get(selectedPlugin);
-      target = selectedDevice;
       if (selectedDevice && activePlugin) {
+        target = selectedDevice;
         pluginKey = getPluginKey(selectedDevice.serial, activePlugin.id);
-        pluginIsEnabled = true;
       } else {
         target =
           clients.find((client: Client) => client.id === selectedApp) || null;
         activePlugin = clientPlugins.get(selectedPlugin);
         if (activePlugin && target) {
           pluginKey = getPluginKey(target.id, activePlugin.id);
-          pluginIsEnabled = pluginIsStarred(
-            userStarredPlugins,
-            selectedApp,
-            activePlugin.id,
-          );
         }
       }
+      pluginIsEnabled =
+        activePlugin !== undefined &&
+        isPluginEnabled(
+          enabledPlugins,
+          enabledDevicePlugins,
+          selectedApp,
+          activePlugin.id,
+        );
     }
     const isArchivedDevice = !selectedDevice
       ? false
-      : selectedDevice instanceof ArchivedDevice;
+      : selectedDevice.isArchived;
     if (isArchivedDevice) {
       pluginIsEnabled = true;
     }
@@ -507,6 +609,9 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
       pendingMessages,
       pluginIsEnabled,
       settingsState,
+      latestInstalledVersion: installedPlugins.get(
+        activePlugin?.packageName ?? '',
+      ),
     };
     return s;
   },
@@ -514,6 +619,7 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
     setPluginState,
     selectPlugin,
     setStaticView,
-    starPlugin,
+    enablePlugin: switchPlugin,
+    loadPlugin,
   },
 )(PluginContainer);

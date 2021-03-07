@@ -12,7 +12,7 @@ import {
   TableRows_immutable,
   TableColumnSizes,
   TableColumns,
-} from 'flipper';
+} from './ui';
 import FlexColumn from './ui/components/FlexColumn';
 import Button from './ui/components/Button';
 import DetailSidebar from './chrome/DetailSidebar';
@@ -24,7 +24,7 @@ import {List, Map as ImmutableMap} from 'immutable';
 import React from 'react';
 import {KeyboardActions} from './MenuBar';
 import {TableBodyRow} from './ui';
-import {Idler} from './utils/Idler';
+import {Idler} from 'flipper-plugin';
 
 type ID = string;
 

@@ -1,6 +1,6 @@
 {
   "name": "flipper-doctor",
-  "version": "0.60.0",
+  "version": "0.0.0",
   "description": "Utility for checking for issues with a flipper installation",
   "main": "lib/index.js",
   "flipperBundlerEntry": "src",
@@ -9,19 +9,18 @@
   "devDependencies": {
     "@types/fb-watchman": "2.0.0",
     "@types/jest": "^26",
-    "@typescript-eslint/eslint-plugin": "^2.8.0",
-    "eslint": "^7.4.0",
+    "@typescript-eslint/eslint-plugin": "^4.15.2",
+    "eslint": "^7.12.1",
     "eslint-plugin-babel": "^5.3.1",
-    "eslint-plugin-flowtype": "^4.7.0",
     "eslint-plugin-header": "^3.0.0",
     "eslint-plugin-jsx-a11y": "^6.3.1",
     "eslint-plugin-prettier": "^3.1.1",
-    "eslint-plugin-react": "^7.20.0",
+    "eslint-plugin-react": "^7.21.5",
     "jest": "^26",
-    "prettier": "^2.0.0",
+    "prettier": "^2.2.1",
     "ts-jest": "^26.0.0",
     "tslint-config-prettier": "^1.18.0",
-    "typescript": "^4.0.3"
+    "typescript": "^4.1.2"
   },
   "scripts": {
     "reset": "rimraf lib *.tsbuildinfo",
@@ -38,7 +37,7 @@
   ],
   "author": "Facebook, Inc",
   "dependencies": {
-    "@types/node": "^13.11.0",
+    "@types/node": "^14.14.10",
     "envinfo": "^7.5.1",
     "fb-watchman": "^2.0.1"
   }

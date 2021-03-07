@@ -8,101 +8,148 @@
  */
 
 import React, {useEffect, useState} from 'react';
-import {Modal, Button, message, Alert} from 'antd';
-import {AndroidOutlined, AppleOutlined} from '@ant-design/icons';
-import {renderReactRoot} from '../../utils/renderReactRoot';
+import {Modal, Button, message, Alert, Menu, Dropdown} from 'antd';
+import {
+  AppleOutlined,
+  PoweroffOutlined,
+  MoreOutlined,
+  AndroidOutlined,
+} from '@ant-design/icons';
 import {Store} from '../../reducers';
 import {useStore} from '../../utils/useStore';
 import {launchEmulator} from '../../devices/AndroidDevice';
-import Layout from '../../ui/components/Layout';
+import {Layout, renderReactRoot, withTrackingScope} from 'flipper-plugin';
+import {Provider} from 'react-redux';
 import {
   launchSimulator,
   getSimulators,
   IOSDeviceParams,
 } from '../../dispatcher/iOSDevice';
+import GK from '../../fb-stubs/GK';
+import {JSEmulatorLauncherSheetSandy} from '../../chrome/JSEmulatorLauncherSheet';
+
+const COLD_BOOT = 'cold-boot';
 
 export function showEmulatorLauncher(store: Store) {
-  renderReactRoot(
-    (unmount) => (
-      <LaunchEmulatorDialog onClose={unmount} getSimulators={getSimulators} />
-    ),
-    store,
-  );
+  renderReactRoot((unmount) => (
+    <Provider store={store}>
+      <LaunchEmulatorDialog
+        onClose={unmount}
+        getSimulators={getSimulators.bind(store)}
+      />
+    </Provider>
+  ));
 }
 
 type GetSimulators = typeof getSimulators;
 
-export function LaunchEmulatorDialog({
-  onClose,
-  getSimulators,
-}: {
-  onClose: () => void;
-  getSimulators: GetSimulators;
-}) {
-  const iosEnabled = useStore((state) => state.settingsState.enableIOS);
-  const androidEmulators = useStore((state) =>
-    state.settingsState.enableAndroid ? state.connections.androidEmulators : [],
-  );
-  const [iosEmulators, setIosEmulators] = useState<IOSDeviceParams[]>([]);
+export const LaunchEmulatorDialog = withTrackingScope(
+  function LaunchEmulatorDialog({
+    onClose,
+    getSimulators,
+  }: {
+    onClose: () => void;
+    getSimulators: GetSimulators;
+  }) {
+    const iosEnabled = useStore((state) => state.settingsState.enableIOS);
+    const androidEmulators = useStore((state) =>
+      state.settingsState.enableAndroid
+        ? state.connections.androidEmulators
+        : [],
+    );
+    const [iosEmulators, setIosEmulators] = useState<IOSDeviceParams[]>([]);
 
-  useEffect(() => {
-    if (!iosEnabled) {
-      return;
-    }
-    getSimulators(false).then((emulators) => {
-      setIosEmulators(
-        emulators.filter(
-          (device) =>
-            device.state === 'Shutdown' &&
-            device.deviceTypeIdentifier?.match(/iPhone|iPad/i),
-        ),
+    const store = useStore();
+    useEffect(() => {
+      if (!iosEnabled) {
+        return;
+      }
+      getSimulators(store, false).then((emulators) => {
+        setIosEmulators(
+          emulators.filter(
+            (device) =>
+              device.state === 'Shutdown' &&
+              device.deviceTypeIdentifier?.match(/iPhone|iPad/i),
+          ),
+        );
+      });
+    }, [iosEnabled, getSimulators, store]);
+
+    const items = [
+      ...(androidEmulators.length > 0
+        ? [<AndroidOutlined key="android logo" />]
+        : []),
+      ...androidEmulators.map((name) => {
+        const launch = (coldBoot: boolean) => {
+          launchEmulator(name, coldBoot)
+            .catch((e) => {
+              console.error(e);
+              message.error('Failed to start emulator: ' + e);
+            })
+            .then(onClose);
+        };
+        const menu = (
+          <Menu
+            onClick={({key}) => {
+              switch (key) {
+                case COLD_BOOT: {
+                  launch(true);
+                  break;
+                }
+              }
+            }}>
+            <Menu.Item key={COLD_BOOT} icon={<PoweroffOutlined />}>
+              Cold Boot
+            </Menu.Item>
+          </Menu>
+        );
+        return (
+          <Dropdown.Button
+            key={name}
+            overlay={menu}
+            icon={<MoreOutlined />}
+            onClick={() => launch(false)}>
+            {name}
+          </Dropdown.Button>
+        );
+      }),
+      ...(iosEmulators.length > 0 ? [<AppleOutlined key="ios logo" />] : []),
+      ...iosEmulators.map((device) => (
+        <Button
+          key={device.udid}
+          onClick={() =>
+            launchSimulator(device.udid)
+              .catch((e) => {
+                console.error(e);
+                message.error('Failed to start simulator: ' + e);
+              })
+              .then(onClose)
+          }>
+          {device.name}
+        </Button>
+      )),
+    ];
+    // Launch JS emulator
+    if (GK.get('flipper_js_client_emulator')) {
+      items.push(
+        <JSEmulatorLauncherSheetSandy
+          key="js-emulator-launcher"
+          onClose={onClose}
+        />,
       );
-    });
-  }, [iosEnabled, getSimulators]);
+    }
 
-  const items = [
-    ...androidEmulators.map((name) => (
-      <Button
-        key={name}
-        icon={<AndroidOutlined />}
-        onClick={() => {
-          launchEmulator(name)
-            .catch((e) => {
-              console.error(e);
-              message.error('Failed to start emulator:' + e);
-            })
-            .finally(onClose);
-        }}>
-        {name}
-      </Button>
-    )),
-    ...iosEmulators.map((device) => (
-      <Button
-        key={device.udid}
-        icon={<AppleOutlined />}
-        onClick={() => {
-          launchSimulator(device.udid)
-            .catch((e) => {
-              console.error(e);
-              message.error('Failed to start simulator:' + e);
-            })
-            .finally(onClose);
-        }}>
-        {device.name}
-      </Button>
-    )),
-  ];
-
-  return (
-    <Modal
-      visible
-      onCancel={onClose}
-      title="Launch Emulator"
-      footer={null}
-      bodyStyle={{maxHeight: 400, overflow: 'auto'}}>
-      <Layout.Vertical gap>
-        {items.length ? items : <Alert message="No emulators available" />}
-      </Layout.Vertical>
-    </Modal>
-  );
-}
+    return (
+      <Modal
+        visible
+        onCancel={onClose}
+        title="Launch Emulator"
+        footer={null}
+        bodyStyle={{maxHeight: 400, overflow: 'auto'}}>
+        <Layout.Container gap>
+          {items.length ? items : <Alert message="No emulators available" />}
+        </Layout.Container>
+      </Modal>
+    );
+  },
+);

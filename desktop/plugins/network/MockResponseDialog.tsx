@@ -7,11 +7,14 @@
  * @format
  */
 
-import {FlexColumn, Button, styled} from 'flipper';
+import {Button, styled, Layout, Spacer} from 'flipper';
 
 import {ManageMockResponsePanel} from './ManageMockResponsePanel';
 import {Route, Request, Response} from './types';
 import React from 'react';
+
+import {NetworkRouteContext} from './index';
+import {useContext} from 'react';
 
 type Props = {
   routes: {[id: string]: Route};
@@ -27,32 +30,54 @@ const Title = styled('div')({
   marginTop: 8,
 });
 
-const Container = styled(FlexColumn)({
+const StyledContainer = styled(Layout.Container)({
   padding: 10,
-  width: 800,
-  height: 550,
-});
-
-const Row = styled(FlexColumn)({
-  alignItems: 'flex-end',
-  marginTop: 16,
+  width: 1200,
 });
 
 export function MockResponseDialog(props: Props) {
+  const networkRouteManager = useContext(NetworkRouteContext);
   return (
-    <Container>
+    <StyledContainer pad gap width={1200}>
       <Title>Mock Network Responses</Title>
-      <ManageMockResponsePanel
-        routes={props.routes}
-        highlightedRows={props.highlightedRows}
-        requests={props.requests}
-        responses={props.responses}
-      />
-      <Row>
+      <Layout.Container>
+        <ManageMockResponsePanel
+          routes={props.routes}
+          highlightedRows={props.highlightedRows}
+          requests={props.requests}
+          responses={props.responses}
+        />
+      </Layout.Container>
+      <Layout.Horizontal gap>
+        <Button
+          compact
+          padded
+          onClick={() => {
+            networkRouteManager.importRoutes();
+          }}>
+          Import
+        </Button>
+        <Button
+          compact
+          padded
+          onClick={() => {
+            networkRouteManager.exportRoutes();
+          }}>
+          Export
+        </Button>
+        <Button
+          compact
+          padded
+          onClick={() => {
+            networkRouteManager.clearRoutes();
+          }}>
+          Clear
+        </Button>
+        <Spacer />
         <Button compact padded onClick={props.onHide}>
           Close
         </Button>
-      </Row>
-    </Container>
+      </Layout.Horizontal>
+    </StyledContainer>
   );
 }

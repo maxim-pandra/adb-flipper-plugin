@@ -7,6 +7,7 @@
  * @format
  */
 
+import {produce} from 'immer';
 import {Actions} from '.';
 import {deconstructPluginKey} from '../utils/clientUtils';
 
@@ -27,14 +28,16 @@ export type Action =
       };
     }
   | {
-      type: 'CLEAR_PLUGIN_STATE';
+      type: 'CLEAR_CLIENT_PLUGINS_STATE';
       payload: {clientId: string; devicePlugins: Set<string>};
+    }
+  | {
+      type: 'CLEAR_PLUGIN_STATE';
+      payload: {pluginId: string};
     };
 
-const INITIAL_STATE: State = {};
-
 export default function reducer(
-  state: State | undefined = INITIAL_STATE,
+  state: State | undefined = {},
   action: Actions,
 ): State {
   if (action.type === 'SET_PLUGIN_STATE') {
@@ -49,7 +52,7 @@ export default function reducer(
       };
     }
     return {...state};
-  } else if (action.type === 'CLEAR_PLUGIN_STATE') {
+  } else if (action.type === 'CLEAR_CLIENT_PLUGINS_STATE') {
     const {payload} = action;
     return Object.keys(state).reduce((newState: State, pluginKey) => {
       // Only add the pluginState, if its from a plugin other than the one that
@@ -65,6 +68,16 @@ export default function reducer(
       }
       return newState;
     }, {});
+  } else if (action.type === 'CLEAR_PLUGIN_STATE') {
+    const {pluginId} = action.payload;
+    return produce(state, (draft) => {
+      Object.keys(draft).forEach((pluginKey) => {
+        const pluginKeyParts = deconstructPluginKey(pluginKey);
+        if (pluginKeyParts.pluginName === pluginId) {
+          delete draft[pluginKey];
+        }
+      });
+    });
   } else {
     return state;
   }
@@ -75,5 +88,10 @@ export const setPluginState = (payload: {
   state: Object;
 }): Action => ({
   type: 'SET_PLUGIN_STATE',
+  payload,
+});
+
+export const clearPluginState = (payload: {pluginId: string}): Action => ({
+  type: 'CLEAR_PLUGIN_STATE',
   payload,
 });

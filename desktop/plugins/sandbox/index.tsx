@@ -72,6 +72,9 @@ export default class SandboxView extends FlipperPlugin<
   });
 
   init() {
+    if (!this.client.isConnected) {
+      return;
+    }
     this.client.call('getSandbox', {}).then((results: Array<Sandbox>) => {
       this.setState({sandboxes: results});
     });
@@ -125,9 +128,8 @@ export default class SandboxView extends FlipperPlugin<
           </SandboxView.FeedbackMessage>
         </SandboxView.TextInputLayout>
         {this.state.sandboxes.map((sandbox) => (
-          <ButtonContainer>
+          <ButtonContainer key={sandbox.value}>
             <BigButton
-              key={sandbox.value}
               onClick={() => this.onSendSandboxEnvironment(sandbox.value)}>
               {sandbox.name}
             </BigButton>

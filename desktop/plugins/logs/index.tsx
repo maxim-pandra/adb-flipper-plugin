@@ -320,6 +320,10 @@ export function supportsDevice(device: Device) {
   );
 }
 
+type ExportedState = {
+  logs: DeviceLogEntry[];
+};
+
 export function devicePlugin(client: DevicePluginClient) {
   let counter = 0;
   let batch: Array<{
@@ -330,21 +334,29 @@ export function devicePlugin(client: DevicePluginClient) {
   let batchTimer: NodeJS.Timeout | undefined;
   const tableRef: MutableRefObject<ManagedTableClass | null> = createRef();
 
-  // TODO T70688226: this can be removed once plugin stores logs,
-  // rather than the device.
-
-  const initialState = addEntriesToState(
-    client.device.realDevice
-      .getLogs()
-      .map((log: DeviceLogEntry) => processEntry(log, '' + counter++)),
-  );
-
-  const rows = createState<ReadonlyArray<TableBodyRow>>(initialState.rows);
+  const rows = createState<ReadonlyArray<TableBodyRow>>([]);
   const entries = createState<Entries>([]);
   const highlightedRows = createState<ReadonlySet<string>>(new Set());
   const counters = createState<ReadonlyArray<Counter>>(restoreSavedCounters());
   const timeDirection = createState<'up' | 'down'>('up');
   const isDeeplinked = createState(false);
+
+  client.onExport<ExportedState>(async () => {
+    return {
+      logs: entries
+        .get()
+        .slice(-100 * 1000)
+        .map((e) => e.entry),
+    };
+  });
+
+  client.onImport<ExportedState>((data) => {
+    const imported = addEntriesToState(
+      data.logs.map((log) => processEntry(log, '' + counter++)),
+    );
+    rows.set(imported.rows);
+    entries.set(imported.entries);
+  });
 
   client.onDeepLink((payload: unknown) => {
     if (typeof payload === 'string') {
@@ -485,10 +497,8 @@ export function devicePlugin(client: DevicePluginClient) {
   }
 
   function clearLogs() {
-    // TODO T70688226: implement this when the store is local
-    client.device.realDevice.clearLogs().catch((e: any) => {
-      console.error('Failed to clear logs: ', e);
-    });
+    // Non public Android specific api
+    (client.device.realDevice as any)?.clearLogs?.();
     entries.set([]);
     rows.set([]);
     highlightedRows.set(new Set());

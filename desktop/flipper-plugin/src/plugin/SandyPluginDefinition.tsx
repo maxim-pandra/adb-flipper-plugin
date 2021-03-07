@@ -7,7 +7,7 @@
  * @format
  */
 
-import {PluginDetails} from 'flipper-plugin-lib';
+import {ActivatablePluginDetails} from 'flipper-plugin-lib';
 import {PluginFactory, FlipperPluginComponent} from './Plugin';
 import {DevicePluginPredicate, DevicePluginFactory} from './DevicePlugin';
 
@@ -16,7 +16,7 @@ import {DevicePluginPredicate, DevicePluginFactory} from './DevicePlugin';
  */
 export type FlipperDevicePluginModule = {
   /** predicate that determines if this plugin applies to the currently selcted device */
-  supportsDevice: DevicePluginPredicate;
+  supportsDevice: DevicePluginPredicate; // TODO T84453692: remove this function after some transition period in favor of BaseDevice.supportsPlugin.
   /** the factory function that initializes a plugin instance */
   devicePlugin: DevicePluginFactory;
   /** the component type that can render this plugin */
@@ -42,29 +42,17 @@ export type FlipperPluginModule<Factory extends PluginFactory<any, any>> = {
 export class SandyPluginDefinition {
   id: string;
   module: FlipperPluginModule<any> | FlipperDevicePluginModule;
-  details: PluginDetails;
+  details: ActivatablePluginDetails;
   isDevicePlugin: boolean;
 
-  // TODO: Implement T68683476
-  exportPersistedState:
-    | ((
-        callClient: (method: string, params?: any) => Promise<any>,
-        persistedState: any, // TODO: type StaticPersistedState | undefined,
-        store: any, // TODO: ReduxState | undefined,
-        idler?: any, // TODO: Idler,
-        statusUpdate?: (msg: string) => void,
-        supportsMethod?: (method: string) => Promise<boolean>,
-      ) => Promise<any /* TODO: StaticPersistedState | undefined */>)
-    | undefined = undefined;
-
   constructor(
-    details: PluginDetails,
+    details: ActivatablePluginDetails,
     module: FlipperPluginModule<any> | FlipperDevicePluginModule,
   );
-  constructor(details: PluginDetails, module: any) {
+  constructor(details: ActivatablePluginDetails, module: any) {
     this.id = details.id;
     this.details = details;
-    if (module.supportsDevice) {
+    if (details.pluginType === 'device' || module.supportsDevice) {
       // device plugin
       this.isDevicePlugin = true;
       if (!module.devicePlugin || typeof module.devicePlugin !== 'function') {
@@ -123,8 +111,8 @@ export class SandyPluginDefinition {
     return this.details.version;
   }
 
-  get isDefault() {
-    return this.details.isDefault;
+  get isBundled() {
+    return this.details.isBundled;
   }
 
   get keyboardActions() {

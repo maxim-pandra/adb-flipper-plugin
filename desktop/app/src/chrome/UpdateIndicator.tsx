@@ -7,115 +7,124 @@
  * @format
  */
 
-import {LauncherMsg} from '../reducers/application';
-import {colors, FlexRow, Glyph, styled} from 'flipper';
-import Tooltip from '../ui/components/Tooltip';
+import {notification, Typography} from 'antd';
 import isProduction from '../utils/isProduction';
-import {
-  checkForUpdate,
-  VersionCheckResult,
-} from '../utils/publicVersionChecker';
 import {reportPlatformFailures} from '../utils/metrics';
-import React from 'react';
-import {shell} from 'electron';
-import config from '../utils/processConfig';
+import React, {useEffect, useState} from 'react';
 import fbConfig from '../fb-stubs/config';
+import {useStore} from '../utils/useStore';
+import {getAppVersion} from '../utils/info';
+import {checkForUpdate} from '../fb-stubs/checkForUpdate';
+import ReleaseChannel from '../ReleaseChannel';
 
-const Container = styled(FlexRow)({
-  alignItems: 'center',
-  marginLeft: 4,
-});
-
-type Props = {
-  launcherMsg: LauncherMsg;
-  version: string;
-};
-
-type State = {
-  versionCheckResult: VersionCheckResult;
-};
-
-function getSeverityColor(severity: 'warning' | 'error'): string {
-  switch (severity) {
-    case 'warning':
-      return colors.light30;
-    case 'error':
-      return colors.cherry;
-  }
-}
-
-export default class UpdateIndicator extends React.PureComponent<Props, State> {
-  state = {
-    versionCheckResult: {kind: 'up-to-date'} as VersionCheckResult,
-  };
-
-  renderMessage(): React.ReactNode {
-    if (this.props.launcherMsg.message.length == 0) {
-      return null;
+export type VersionCheckResult =
+  | {
+      kind: 'update-available';
+      url: string;
+      version: string;
     }
-
-    return (
-      <Container>
-        <span title={this.props.launcherMsg.message}>
-          <Glyph
-            color={getSeverityColor(this.props.launcherMsg.severity)}
-            name="caution-triangle"
-          />
-        </span>
-      </Container>
-    );
-  }
-
-  renderUpdateIndicator(): React.ReactNode {
-    const result = this.state.versionCheckResult;
-    if (result.kind !== 'update-available') {
-      return null;
+  | {
+      kind: 'up-to-date';
     }
+  | {
+      kind: 'error';
+      msg: string;
+    };
 
-    const container = (
-      <Container>
-        <span
-          onClick={() => shell.openExternal(result.url)}
-          role="button"
-          tabIndex={0}>
-          <Glyph
-            color={getSeverityColor(this.props.launcherMsg.severity)}
-            name="caution-triangle"
-          />
-        </span>
-      </Container>
-    );
-    return (
-      <Tooltip
-        options={{position: 'toLeft'}}
-        title={`Update to Flipper v${result.version} available. Click to download.`}
-        children={container}
-      />
-    );
-  }
+export default function UpdateIndicator() {
+  const [
+    versionCheckResult,
+    setVersionCheckResult,
+  ] = useState<VersionCheckResult>({kind: 'up-to-date'});
+  const launcherMsg = useStore((state) => state.application.launcherMsg);
 
-  componentDidMount() {
-    if (isProduction() && (config().launcherEnabled || !fbConfig.isFBBuild)) {
+  // Effect to show notification if details change
+  useEffect(() => {
+    switch (versionCheckResult.kind) {
+      case 'up-to-date':
+        break;
+      case 'update-available':
+        console.log(
+          `Flipper update available: ${versionCheckResult.version} at ${versionCheckResult.url}`,
+        );
+        notification.info({
+          placement: 'bottomLeft',
+          key: 'flipperupdatecheck',
+          message: 'Update available',
+          description: (
+            <>
+              Flipper version {versionCheckResult.version} is now available.
+              {fbConfig.isFBBuild ? (
+                fbConfig.getReleaseChannel() === ReleaseChannel.INSIDERS ? (
+                  <> Restart Flipper to update to the latest version.</>
+                ) : (
+                  <>
+                    {' '}
+                    Pull <code>~/fbsource</code> and/or restart Flipper to
+                    update to the latest version.
+                  </>
+                )
+              ) : (
+                <>
+                  {' '}
+                  Click to{' '}
+                  <Typography.Link href={versionCheckResult.url}>
+                    download
+                  </Typography.Link>
+                  .
+                </>
+              )}
+            </>
+          ),
+          duration: null, // no auto close
+        });
+        break;
+      case 'error':
+        console.warn(
+          `Failed to check for Flipper update: ${versionCheckResult.msg}`,
+        );
+        break;
+    }
+  }, [versionCheckResult]);
+
+  // trigger the update check, unless there is a launcher message already
+  useEffect(() => {
+    const version = getAppVersion();
+    if (launcherMsg && launcherMsg.message) {
+      if (launcherMsg.severity === 'error') {
+        notification.error({
+          placement: 'bottomLeft',
+          key: 'launchermsg',
+          message: 'Launch problem',
+          description: launcherMsg.message,
+          duration: null,
+        });
+      } else {
+        notification.warning({
+          placement: 'bottomLeft',
+          key: 'launchermsg',
+          message: 'Flipper version warning',
+          description: launcherMsg.message,
+          duration: null,
+        });
+      }
+    } else if (version && isProduction()) {
       reportPlatformFailures(
-        checkForUpdate(this.props.version).then((res) => {
+        checkForUpdate(version).then((res) => {
           if (res.kind === 'error') {
-            console.warn('Version check failure: ', res.msg);
-            throw new Error(res.msg);
+            console.warn('Version check failure: ', res);
+            setVersionCheckResult({
+              kind: 'error',
+              msg: res.msg,
+            });
+          } else {
+            setVersionCheckResult(res);
           }
-
-          this.setState({versionCheckResult: res});
         }),
         'publicVersionCheck',
       );
     }
-  }
+  }, [launcherMsg]);
 
-  render(): React.ReactNode {
-    return (
-      <>
-        {this.renderMessage()}
-        {this.renderUpdateIndicator()}
-      </>
-    );
-  }
+  return null;
 }

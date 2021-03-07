@@ -7,9 +7,14 @@
  * @format
  */
 
-import React, {cloneElement, useState, useCallback} from 'react';
-import {styled, Layout} from 'flipper';
-import {Button, Divider, Badge, Tooltip} from 'antd';
+import React, {
+  cloneElement,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from 'react';
+import {Button, Divider, Badge, Tooltip, Avatar, Popover} from 'antd';
 import {
   MobileFilled,
   AppstoreOutlined,
@@ -20,16 +25,39 @@ import {
   SettingOutlined,
   QuestionCircleOutlined,
   MedicineBoxOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import {SidebarLeft, SidebarRight} from './SandyIcons';
 import {useDispatch, useStore} from '../utils/useStore';
-import {toggleLeftSidebarVisible} from '../reducers/application';
-import {theme} from './theme';
+import {
+  ACTIVE_SHEET_PLUGINS,
+  setActiveSheet,
+  toggleLeftSidebarVisible,
+  toggleRightSidebarVisible,
+} from '../reducers/application';
+import {theme, Layout, withTrackingScope} from 'flipper-plugin';
+import SetupDoctorScreen, {checkHasNewProblem} from './SetupDoctorScreen';
 import SettingsSheet from '../chrome/SettingsSheet';
 import WelcomeScreen from './WelcomeScreen';
+import SignInSheet from '../chrome/SignInSheet';
 import {errorCounterAtom} from '../chrome/ConsoleLogs';
 import {ToplevelProps} from './SandyApp';
 import {useValue} from 'flipper-plugin';
+import {logout, USER_NOT_SIGNEDIN, USER_UNAUTHORIZED} from '../reducers/user';
+import config from '../fb-stubs/config';
+import styled from '@emotion/styled';
+import {showEmulatorLauncher} from './appinspect/LaunchEmulator';
+import SupportRequestFormV2 from '../fb-stubs/SupportRequestFormV2';
+import {setStaticView, StaticView} from '../reducers/connections';
+import {getInstance} from '../fb-stubs/Logger';
+import {getUser} from '../fb-stubs/user';
+import {SandyRatingButton} from '../chrome/RatingButton';
+import {filterNotifications} from './notification/notificationUtils';
+import {useMemoize} from '../utils/useMemoize';
+import isProduction from '../utils/isProduction';
+import NetworkGraph from '../chrome/NetworkGraph';
+import FpsGraph from '../chrome/FpsGraph';
+import UpdateIndicator from '../chrome/UpdateIndicator';
 
 const LeftRailButtonElem = styled(Button)<{kind?: 'small'}>(({kind}) => ({
   width: kind === 'small' ? 32 : 36,
@@ -40,7 +68,7 @@ const LeftRailButtonElem = styled(Button)<{kind?: 'small'}>(({kind}) => ({
 }));
 LeftRailButtonElem.displayName = 'LeftRailButtonElem';
 
-function LeftRailButton({
+export function LeftRailButton({
   icon,
   small,
   selected,
@@ -48,27 +76,36 @@ function LeftRailButton({
   count,
   title,
   onClick,
+  disabled,
 }: {
   icon?: React.ReactElement;
   small?: boolean;
   toggled?: boolean;
-  selected?: boolean; // TODO: make sure only one element can be selected
-  count?: number;
+  selected?: boolean;
+  disabled?: boolean;
+  count?: number | true;
   title: string;
   onClick?: React.MouseEventHandler<HTMLElement>;
 }) {
   let iconElement =
     icon && cloneElement(icon, {style: {fontSize: small ? 16 : 24}});
   if (count !== undefined) {
-    iconElement = <Badge count={count}>{iconElement}</Badge>;
+    iconElement =
+      count === true ? (
+        <Badge dot>{iconElement}</Badge>
+      ) : (
+        <Badge count={count}>{iconElement}</Badge>
+      );
   }
   return (
     <Tooltip title={title} placement="right">
       <LeftRailButtonElem
+        title={title}
         kind={small ? 'small' : undefined}
         type={selected ? 'primary' : 'ghost'}
         icon={iconElement}
         onClick={onClick}
+        disabled={disabled}
         style={{
           color: toggled ? theme.primaryColor : undefined,
           background: toggled ? theme.backgroundWash : undefined,
@@ -85,14 +122,15 @@ const LeftRailDivider = styled(Divider)({
 });
 LeftRailDivider.displayName = 'LeftRailDividier';
 
-export function LeftRail({
+export const LeftRail = withTrackingScope(function LeftRail({
   toplevelSelection,
   setToplevelSelection,
 }: ToplevelProps) {
+  const dispatch = useDispatch();
   return (
-    <Layout.Container borderRight padv={12} padh={6} width={48}>
+    <Layout.Container borderRight padv={12} width={48}>
       <Layout.Bottom>
-        <Layout.Vertical center gap={10}>
+        <Layout.Container center gap={10} padh={6}>
           <LeftRailButton
             icon={<MobileFilled />}
             title="App Inspect"
@@ -101,46 +139,51 @@ export function LeftRail({
               setToplevelSelection('appinspect');
             }}
           />
-          <LeftRailButton icon={<AppstoreOutlined />} title="Plugin Manager" />
-          <LeftRailButton icon={<BellOutlined />} title="Notifications" />
+          <LeftRailButton
+            icon={<AppstoreOutlined />}
+            title="Plugin Manager"
+            onClick={() => {
+              dispatch(setActiveSheet(ACTIVE_SHEET_PLUGINS));
+            }}
+          />
+          <NotificationButton
+            toplevelSelection={toplevelSelection}
+            setToplevelSelection={setToplevelSelection}
+          />
           <LeftRailDivider />
           <DebugLogsButton
             toplevelSelection={toplevelSelection}
             setToplevelSelection={setToplevelSelection}
           />
-        </Layout.Vertical>
-        <Layout.Vertical center gap={10}>
-          <LeftRailButton
-            icon={<MedicineBoxOutlined />}
-            small
-            title="Setup Doctor"
-          />
+        </Layout.Container>
+        <Layout.Container center gap={10} padh={6}>
+          {!isProduction() && (
+            <div>
+              <FpsGraph />
+              <NetworkGraph />
+            </div>
+          )}
+          <UpdateIndicator />
+          <SandyRatingButton />
+          <LaunchEmulatorButton />
+          <SetupDoctorButton />
           <WelcomeScreenButton />
           <ShowSettingsButton />
-          <LeftRailButton
-            icon={<BugOutlined />}
-            small
-            title="Feedback / Bug Reporter"
-          />
-          <LeftRailButton
-            icon={<SidebarRight />}
-            small
-            title="Right Sidebar Toggle"
-          />
+          <SupportFormButton />
+          <RightSidebarToggleButton />
           <LeftSidebarToggleButton />
-          <LeftRailButton icon={<LoginOutlined />} title="Log In" />
-        </Layout.Vertical>
+          {config.showLogin && <LoginButton />}
+        </Layout.Container>
       </Layout.Bottom>
     </Layout.Container>
   );
-}
+});
 
 function LeftSidebarToggleButton() {
+  const dispatch = useDispatch();
   const mainMenuVisible = useStore(
     (state) => state.application.leftSidebarVisible,
   );
-
-  const dispatch = useDispatch();
 
   return (
     <LeftRailButton
@@ -151,6 +194,50 @@ function LeftSidebarToggleButton() {
       onClick={() => {
         dispatch(toggleLeftSidebarVisible());
       }}
+    />
+  );
+}
+
+function RightSidebarToggleButton() {
+  const dispatch = useDispatch();
+  const rightSidebarAvailable = useStore(
+    (state) => state.application.rightSidebarAvailable,
+  );
+  const rightSidebarVisible = useStore(
+    (state) => state.application.rightSidebarVisible,
+  );
+
+  return (
+    <LeftRailButton
+      icon={<SidebarRight />}
+      small
+      title="Right Sidebar Toggle"
+      toggled={rightSidebarVisible}
+      disabled={!rightSidebarAvailable}
+      onClick={() => {
+        dispatch(toggleRightSidebarVisible());
+      }}
+    />
+  );
+}
+
+function NotificationButton({
+  toplevelSelection,
+  setToplevelSelection,
+}: ToplevelProps) {
+  const notifications = useStore((state) => state.notifications);
+  const activeNotifications = useMemoize(filterNotifications, [
+    notifications.activeNotifications,
+    notifications.blocklistedPlugins,
+    notifications.blocklistedCategories,
+  ]);
+  return (
+    <LeftRailButton
+      icon={<BellOutlined />}
+      title="Notifications"
+      selected={toplevelSelection === 'notification'}
+      count={activeNotifications.length}
+      onClick={() => setToplevelSelection('notification')}
     />
   );
 }
@@ -173,6 +260,42 @@ function DebugLogsButton({
   );
 }
 
+function LaunchEmulatorButton() {
+  const store = useStore();
+
+  return (
+    <LeftRailButton
+      icon={<RocketOutlined />}
+      title="Start Emulator / Simulator"
+      onClick={() => {
+        showEmulatorLauncher(store);
+      }}
+      small
+    />
+  );
+}
+
+function SetupDoctorButton() {
+  const [visible, setVisible] = useState(false);
+  const result = useStore(
+    (state) => state.healthchecks.healthcheckReport.result,
+  );
+  const hasNewProblem = useMemo(() => checkHasNewProblem(result), [result]);
+  const onClose = useCallback(() => setVisible(false), []);
+  return (
+    <>
+      <LeftRailButton
+        icon={<MedicineBoxOutlined />}
+        small
+        title="Setup Doctor"
+        count={hasNewProblem ? true : undefined}
+        onClick={() => setVisible(true)}
+      />
+      <SetupDoctorScreen visible={visible} onClose={onClose} />
+    </>
+  );
+}
+
 function ShowSettingsButton() {
   const [showSettings, setShowSettings] = useState(false);
   const onClose = useCallback(() => setShowSettings(false), []);
@@ -186,10 +309,30 @@ function ShowSettingsButton() {
         selected={showSettings}
       />
       {showSettings && (
-        <SettingsSheet platform={process.platform} onHide={onClose} useSandy />
+        <SettingsSheet platform={process.platform} onHide={onClose} />
       )}
     </>
   );
+}
+
+function SupportFormButton() {
+  const dispatch = useDispatch();
+  const staticView = useStore((state) => state.connections.staticView);
+  return config.isFBBuild ? (
+    <LeftRailButton
+      icon={<BugOutlined />}
+      small
+      title="Feedback / Bug Reporter"
+      selected={isStaticViewActive(staticView, SupportRequestFormV2)}
+      onClick={() => {
+        getInstance().track('usage', 'support-form-source', {
+          source: 'sidebar',
+          group: undefined,
+        });
+        dispatch(setStaticView(SupportRequestFormV2));
+      }}
+    />
+  ) : null;
 }
 
 function WelcomeScreenButton() {
@@ -219,4 +362,68 @@ function WelcomeScreenButton() {
       />
     </>
   );
+}
+
+function LoginButton() {
+  const dispatch = useDispatch();
+  const user = useStore((state) => state.user);
+  const login = (user?.id ?? null) !== null;
+  const profileUrl = user?.profile_picture?.uri;
+  const [showLogin, setShowLogin] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
+  const onClose = useCallback(() => setShowLogin(false), []);
+  const onHandleVisibleChange = useCallback(
+    (visible) => setShowLogout(visible),
+    [],
+  );
+
+  useEffect(() => {
+    if (config.showLogin) {
+      getUser().catch((error) => {
+        if (error === USER_UNAUTHORIZED || error === USER_NOT_SIGNEDIN) {
+          setShowLogin(true);
+        }
+      });
+    }
+  }, []);
+
+  return login ? (
+    <Popover
+      content={
+        <Button
+          block
+          style={{backgroundColor: theme.backgroundDefault}}
+          onClick={() => {
+            onHandleVisibleChange(false);
+            dispatch(logout());
+          }}>
+          Log Out
+        </Button>
+      }
+      trigger="click"
+      placement="right"
+      visible={showLogout}
+      overlayStyle={{padding: 0}}
+      onVisibleChange={onHandleVisibleChange}>
+      <Layout.Container padv={theme.inlinePaddingV}>
+        <Avatar size="small" src={profileUrl} />
+      </Layout.Container>
+    </Popover>
+  ) : (
+    <>
+      <LeftRailButton
+        icon={<LoginOutlined />}
+        title="Log In"
+        onClick={() => setShowLogin(true)}
+      />
+      {showLogin && <SignInSheet onHide={onClose} />}
+    </>
+  );
+}
+
+function isStaticViewActive(
+  current: StaticView,
+  selected: StaticView,
+): boolean {
+  return Boolean(current && selected && current === selected);
 }

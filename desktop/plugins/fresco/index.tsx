@@ -19,7 +19,7 @@ import {
 } from './api';
 import {Fragment} from 'react';
 import {ImagesMap} from './ImagePool';
-import {MetricType, ReduxState} from 'flipper';
+import {ReduxState} from 'flipper';
 import React from 'react';
 import ImagesCacheOverview from './ImagesCacheOverview';
 import {
@@ -96,7 +96,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
   };
 
   static exportPersistedState = (
-    callClient: (method: string, params?: any) => Promise<any>,
+    callClient: undefined | ((method: string, params?: any) => Promise<any>),
     persistedState: PersistedState,
     store?: ReduxState,
   ): Promise<PersistedState> => {
@@ -104,7 +104,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     if (!persistedState) {
       persistedState = FlipperImagesPlugin.defaultPersistedState;
     }
-    if (!store) {
+    if (!store || !callClient) {
       return defaultPromise;
     }
     return Promise.all([
@@ -132,7 +132,10 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
         ) {
           const surface = attribution[0] ? attribution[0].trim() : undefined;
           if (surface && surface.length > 0) {
-            pluginData.surfaceList.add(surface);
+            pluginData.surfaceList = new Set([
+              ...pluginData.surfaceList,
+              surface,
+            ]);
           }
         }
         pluginData = {
@@ -182,16 +185,17 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     } else if (method == 'events') {
       const event: ImageEvent = data as ImageEvent;
       debugLog('Received events', event);
-      const {surfaceList} = persistedState;
+      let {surfaceList} = persistedState;
       const {attribution} = event;
       if (attribution instanceof Array && attribution.length > 0) {
         const surface = attribution[0] ? attribution[0].trim() : undefined;
         if (surface && surface.length > 0) {
-          surfaceList.add(surface);
+          surfaceList = new Set([...surfaceList, surface]);
         }
       }
       return {
         ...persistedState,
+        surfaceList,
         events: [
           {eventId: persistedState.nextEventId, ...event},
           ...persistedState.events,
@@ -201,37 +205,6 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     }
 
     return persistedState;
-  };
-
-  static metricsReducer = (
-    persistedState: PersistedState,
-  ): Promise<MetricType> => {
-    const {events, imagesMap, closeableReferenceLeaks} = persistedState;
-
-    const wastedBytes = (events || []).reduce((acc, event) => {
-      const {viewport, imageIds} = event;
-      if (!viewport) {
-        return acc;
-      }
-      return imageIds.reduce((innerAcc, imageID) => {
-        const imageData: ImageData = imagesMap[imageID];
-        if (!imageData) {
-          return innerAcc;
-        }
-        const imageWidth: number = imageData.width;
-        const imageHeight: number = imageData.height;
-        const viewPortWidth: number = viewport.width;
-        const viewPortHeight: number = viewport.height;
-        const viewPortArea = viewPortWidth * viewPortHeight;
-        const imageArea = imageWidth * imageHeight;
-        return innerAcc + Math.max(0, imageArea - viewPortArea);
-      }, acc);
-    }, 0);
-
-    return Promise.resolve({
-      WASTED_BYTES: wastedBytes,
-      CLOSEABLE_REFERENCE_LEAKS: (closeableReferenceLeaks || []).length,
-    });
   };
 
   static getActiveNotifications = ({
@@ -311,13 +284,17 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
 
   init() {
     debugLog('init()');
-    this.updateCaches('init');
-    this.client.subscribe(
-      'debug_overlay_event',
-      (event: FrescoDebugOverlayEvent) => {
-        this.setState({isDebugOverlayEnabled: event.enabled});
-      },
-    );
+    if (this.client.isConnected) {
+      this.updateCaches('init');
+      this.client.subscribe(
+        'debug_overlay_event',
+        (event: FrescoDebugOverlayEvent) => {
+          this.setState({isDebugOverlayEnabled: event.enabled});
+        },
+      );
+    } else {
+      debugLog(`not connected)`);
+    }
     this.imagePool = new ImagePool(this.getImage, (images: ImagesMap) =>
       this.props.setPersistedState({imagesMap: images}),
     );
@@ -405,6 +382,10 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
   };
 
   getImage = (imageId: string) => {
+    if (!this.client.isConnected) {
+      debugLog(`Cannot fetch image ${imageId}: disconnected`);
+      return;
+    }
     debugLog('<- getImage requested for ' + imageId);
     this.client.call('getImage', {imageId}).then((image: ImageData) => {
       debugLog('-> getImage ' + imageId + ' returned');

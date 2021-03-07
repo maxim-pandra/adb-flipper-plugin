@@ -38,7 +38,16 @@ export default Object.freeze({
     defaultPlugins: ['DeviceLogs'],
     supportedOS: ['Android'] as Array<OS>,
     deeplinkSuffix: 'default',
+    papercuts: '',
   },
 
   SUPPORT_GROUPS: [],
+
+  // Only WebSocket requests from the following origin prefixes will be accepted
+  VALID_WEB_SOCKET_REQUEST_ORIGIN_PREFIXES: [
+    'chrome-extension://',
+    'localhost:',
+    'http://localhost:',
+    'app://',
+  ],
 });

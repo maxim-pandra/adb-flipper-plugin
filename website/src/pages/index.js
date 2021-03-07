@@ -11,11 +11,9 @@ import React from 'react';
 import Layout from '@theme/Layout';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import {usePluginData} from '@docusaurus/useGlobalData';
-import {isInternal} from 'internaldocs-fb-helpers';
+import {FbInternalOnly, OssOnly} from 'internaldocs-fb-helpers';
 
 export default function Index() {
-  const FB_INTERNAL = isInternal();
-
   return (
     <Layout title="Extensible mobile app debugger">
       <div>
@@ -28,16 +26,39 @@ export default function Index() {
               desktop interface. Use Flipper as is or extend it using the plugin
               API.
             </h2>
-            {FB_INTERNAL ? (
-              <h2>
-                Facebook employees should download the internal version of
-                Flipper from Managed Software Center
-              </h2>
-            ) : (
+            <FbInternalOnly>
               <div>
-                <p
-                  className="landing-btn landing-btn-left landing-btn-label"
-                  href="https://www.facebook.com/fbflipper/public/mac">
+                <p className="landing-btn landing-btn-left landing-btn-label">
+                  Download
+                </p>
+                <a
+                  className="landing-btn landing-btn-middle primary"
+                  target="_top"
+                  href="munki://detail-Flipper">
+                  Mac
+                </a>
+                <a
+                  className="landing-btn landing-btn-middle primary"
+                  target="_top"
+                  href="https://fburl.com/flipper-linux-download">
+                  Linux (Beta)
+                </a>
+                <a
+                  className="landing-btn landing-btn-right primary"
+                  target="_top"
+                  href="https://fburl.com/flipper-windows-download">
+                  Windows (Beta)
+                </a>
+                <a
+                  className="landing-btn"
+                  href={useBaseUrl('docs/features/index')}>
+                  Learn more
+                </a>
+              </div>
+            </FbInternalOnly>
+            <OssOnly>
+              <div>
+                <p className="landing-btn landing-btn-left landing-btn-label">
                   Download
                 </p>
                 <a
@@ -61,7 +82,7 @@ export default function Index() {
                   Learn more
                 </a>
               </div>
-            )}
+            </OssOnly>
             <div className="slideshow">
               <img src={useBaseUrl('img/logs.png')} className="splashScreen" />
               <img
@@ -150,7 +171,7 @@ export default function Index() {
               className="learnmore"
               href="https://github.com/facebook/flipper"
               target="_blank">
-              Learn more
+              Explore the source on GitHub
             </a>
           </div>
         </div>
@@ -160,14 +181,14 @@ export default function Index() {
             className="landing-btn primary">
             Integrate Flipper In Your App
           </a>
-          {FB_INTERNAL ? null : (
+          <OssOnly>
             <a
               href="https://www.facebook.com/fbflipper/public/mac"
               target="_blank"
               className="landing-btn">
               Download Flipper
             </a>
-          )}
+          </OssOnly>
         </div>
       </div>
     </Layout>

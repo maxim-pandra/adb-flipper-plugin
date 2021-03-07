@@ -15,8 +15,8 @@ import type {Methods} from 'console-feed/lib/definitions/Methods';
 import type {Styles} from 'console-feed/lib/definitions/Styles';
 import {createState, useValue} from 'flipper-plugin';
 import {useLocalStorage} from '../utils/useLocalStorage';
-import {theme, useIsDarkMode} from '../sandy-chrome/theme';
-import {useIsSandy} from '../sandy-chrome/SandyContext';
+import {theme} from 'flipper-plugin';
+import {useIsDarkMode} from '../utils/useIsDarkMode';
 
 const MAX_LOG_ITEMS = 1000;
 
@@ -64,7 +64,6 @@ const allLogLevels: Methods[] = [
 const defaultLogLevels: Methods[] = ['warn', 'error', 'table', 'assert'];
 
 export function ConsoleLogs() {
-  const isSandy = useIsSandy();
   const isDarkMode = useIsDarkMode();
   const logs = useValue(logsAtom);
   const [logLevels, setLogLevels] = useLocalStorage<Methods[]>(
@@ -89,10 +88,10 @@ export function ConsoleLogs() {
     );
   }, [logLevels, setLogLevels]);
 
-  const styles = useMemo(() => buildTheme(isSandy), [isSandy]);
+  const styles = useMemo(buildTheme, []);
 
   return (
-    <Layout.Top scrollable>
+    <Layout.Top>
       <Toolbar>
         <ButtonGroup>
           <Button onClick={clearLogs} icon="trash">
@@ -101,25 +100,19 @@ export function ConsoleLogs() {
           <Button dropdown={dropdown}>Log Levels</Button>
         </ButtonGroup>
       </Toolbar>
-      <Console
-        logs={logs}
-        filter={logLevels}
-        variant={isDarkMode || !isSandy ? 'dark' : 'light'}
-        styles={styles}
-      />
+      <Layout.ScrollContainer vertical>
+        <Console
+          logs={logs}
+          filter={logLevels}
+          variant={isDarkMode ? 'dark' : 'light'}
+          styles={styles}
+        />
+      </Layout.ScrollContainer>
     </Layout.Top>
   );
 }
 
-function buildTheme(isSandy: boolean): Styles {
-  if (!isSandy) {
-    const bg = '#333';
-    return {
-      BASE_BACKGROUND_COLOR: bg,
-      BASE_COLOR: 'white',
-      LOG_BACKGROUND: bg,
-    };
-  }
+function buildTheme(): Styles {
   return {
     // See: https://github.com/samdenty/console-feed/blob/master/src/definitions/Styles.d.ts
     BASE_BACKGROUND_COLOR: 'transparent',

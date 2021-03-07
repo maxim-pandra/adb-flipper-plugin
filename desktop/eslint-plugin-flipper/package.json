@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-flipper",
-  "version": "0.60.0",
+  "version": "0.0.0",
   "private": true,
   "description": "Custom ESLint rules for Flipper",
   "repository": "facebook/flipper",
@@ -10,20 +10,19 @@
   "license": "MIT",
   "bugs": "https://github.com/facebook/flipper/issues",
   "dependencies": {
-    "@typescript-eslint/experimental-utils": "^4.2.0",
+    "@typescript-eslint/experimental-utils": "^4.7.0",
     "fs-extra": "^9.0.1"
   },
   "devDependencies": {
     "@types/jest": "26",
-    "@typescript-eslint/parser": "^4.2.0",
-    "flipper-test-utils": "0.60.0",
+    "@typescript-eslint/parser": "^4.14.2",
+    "flipper-test-utils": "0.0.0",
     "jest": "^26",
-    "metro-memory-fs": "^0.61.0",
-    "prettier": "^2.0.0",
+    "prettier": "^2.2.1",
     "rimraf": "^3.0.2",
     "ts-jest": "^26.0.0",
     "ts-node": "^8",
-    "typescript": "^4.0.3"
+    "typescript": "^4.1.2"
   },
   "scripts": {
     "reset": "rimraf lib *.tsbuildinfo",

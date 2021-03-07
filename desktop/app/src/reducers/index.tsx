@@ -15,6 +15,8 @@ import application, {
 import connections, {
   State as DevicesState,
   Action as DevicesAction,
+  persistMigrations as devicesPersistMigrations,
+  persistVersion as devicesPersistVersion,
 } from './connections';
 import pluginStates, {
   State as PluginStatesState,
@@ -52,6 +54,10 @@ import healthchecks, {
   Action as HealthcheckAction,
   State as HealthcheckState,
 } from './healthchecks';
+import pluginDownloads, {
+  State as PluginDownloadsState,
+  Action as PluginDownloadsAction,
+} from './pluginDownloads';
 import usageTracking, {
   Action as TrackingAction,
   State as TrackingState,
@@ -63,11 +69,12 @@ import {launcherConfigDir} from '../utils/launcher';
 import os from 'os';
 import {resolve} from 'path';
 import xdg from 'xdg-basedir';
-import {persistReducer} from 'redux-persist';
+import {createMigrate, createTransform, persistReducer} from 'redux-persist';
 import {PersistPartial} from 'redux-persist/es/persistReducer';
 
 import {Store as ReduxStore, MiddlewareAPI as ReduxMiddlewareAPI} from 'redux';
 import storage from 'redux-persist/lib/storage';
+import {TransformConfig} from 'redux-persist/es/createTransform';
 
 export type Actions =
   | ApplicationAction
@@ -83,6 +90,7 @@ export type Actions =
   | PluginManagerAction
   | HealthcheckAction
   | TrackingAction
+  | PluginDownloadsAction
   | {type: 'INIT'};
 
 export type State = {
@@ -91,7 +99,7 @@ export type State = {
   pluginStates: PluginStatesState;
   pluginMessageQueue: PluginMessageQueueState;
   notifications: NotificationsState & PersistPartial;
-  plugins: PluginsState;
+  plugins: PluginsState & PersistPartial;
   user: UserState & PersistPartial;
   settingsState: SettingsState & PersistPartial;
   launcherSettingsState: LauncherSettingsState & PersistPartial;
@@ -99,6 +107,7 @@ export type State = {
   pluginManager: PluginManagerState;
   healthchecks: HealthcheckState & PersistPartial;
   usageTracking: TrackingState;
+  pluginDownloads: PluginDownloadsState;
 };
 
 export type Store = ReduxStore<State, Actions>;
@@ -111,6 +120,13 @@ const settingsStorage = new JsonFileStorage(
     'settings.json',
   ),
 );
+
+const setTransformer = (config: TransformConfig) =>
+  createTransform(
+    (set: Set<string>) => Array.from(set),
+    (arrayString: string[]) => new Set(arrayString),
+    config,
+  );
 
 const launcherSettingsStorage = new LauncherSettingsStorage(
   resolve(launcherConfigDir(), 'flipper-launcher.toml'),
@@ -126,8 +142,16 @@ export default combineReducers<State, Actions>({
         'userPreferredDevice',
         'userPreferredPlugin',
         'userPreferredApp',
-        'userStarredPlugins',
+        'enabledPlugins',
+        'enabledDevicePlugins',
       ],
+      transforms: [
+        setTransformer({
+          whitelist: ['enabledDevicePlugins', 'userStarredDevicePlugins'],
+        }),
+      ],
+      version: devicesPersistVersion,
+      migrate: createMigrate(devicesPersistMigrations),
     },
     connections,
   ),
@@ -141,7 +165,15 @@ export default combineReducers<State, Actions>({
     },
     notifications,
   ),
-  plugins,
+  plugins: persistReducer<PluginsState, Actions>(
+    {
+      key: 'plugins',
+      storage,
+      whitelist: ['marketplacePlugins', 'uninstalledPlugins'],
+      transforms: [setTransformer({whitelist: ['uninstalledPlugins']})],
+    },
+    plugins,
+  ),
   supportForm,
   pluginManager,
   user: persistReducer(
@@ -174,4 +206,5 @@ export default combineReducers<State, Actions>({
     healthchecks,
   ),
   usageTracking,
+  pluginDownloads,
 });

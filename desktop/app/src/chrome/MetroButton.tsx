@@ -8,71 +8,32 @@
  */
 
 import React, {useCallback, useEffect, useState} from 'react';
-import {
-  Button,
-  ButtonGroup,
-  MetroDevice,
-  connect,
-  colors,
-  styled,
-} from 'flipper';
-import {State} from '../reducers';
-import {MetroReportableEvent} from '../devices/MetroDevice';
+import MetroDevice, {MetroReportableEvent} from '../devices/MetroDevice';
+import {useStore} from '../utils/useStore';
+import {Button as AntButton} from 'antd';
+import {MenuOutlined, ReloadOutlined} from '@ant-design/icons';
+import {theme} from 'flipper-plugin';
 
-type LogEntry = {};
+export default function MetroButton() {
+  const device = useStore((state) =>
+    state.connections.devices.find(
+      (device) => device.os === 'Metro' && device.connected.get(),
+    ),
+  ) as MetroDevice | undefined;
 
-export type PersistedState = {
-  logs: LogEntry[];
-};
-
-type Props = {
-  device: MetroDevice;
-};
-
-function ProgressBar({
-  progress,
-  width,
-  color,
-}: {
-  progress: number;
-  width: number;
-  color: string;
-}) {
-  return (
-    <ProgressBarContainer width={width} color={color}>
-      <ProgressBarBar progress={progress} color={color} />
-    </ProgressBarContainer>
-  );
-}
-
-const ProgressBarContainer = styled.div<{width: number; color: string}>(
-  ({width, color}) => ({
-    border: `1px solid ${color}`,
-    borderRadius: 4,
-    height: 6,
-    width: width,
-  }),
-);
-
-const ProgressBarBar = styled.div<{progress: number; color: string}>(
-  ({progress, color}) => ({
-    background: color,
-    width: `${Math.min(100, Math.round(progress * 100))}%`,
-    height: 4,
-  }),
-);
-
-function MetroButton({device}: Props) {
   const sendCommand = useCallback(
     (command: string) => {
-      device.sendCommand(command);
+      device?.sendCommand(command);
     },
     [device],
   );
   const [progress, setProgress] = useState(1);
-  const [hasBuildError, setHasBuildError] = useState(false);
+  const [_hasBuildError, setHasBuildError] = useState(false);
 
   useEffect(() => {
+    if (!device) {
+      return;
+    }
     function metroEventListener(event: MetroReportableEvent) {
       if (event.type === 'bundle_build_started') {
         setHasBuildError(false);
@@ -93,37 +54,30 @@ function MetroButton({device}: Props) {
     };
   }, [device]);
 
+  if (!device) {
+    return null;
+  }
+
   return (
-    <ButtonGroup>
-      <Button
+    <>
+      <AntButton
+        icon={<ReloadOutlined />}
         title="Reload React Native App"
-        icon="arrows-circle"
-        compact
+        type="ghost"
         onClick={() => {
           sendCommand('reload');
-        }}>
-        {progress < 1 ? (
-          <ProgressBar
-            progress={100 * progress}
-            color={hasBuildError ? colors.red : colors.cyan}
-            width={20}
-          />
-        ) : null}
-      </Button>
-      <Button
+        }}
+        loading={progress < 1}
+        style={{color: _hasBuildError ? theme.errorColor : undefined}}
+      />
+      <AntButton
+        icon={<MenuOutlined />}
         title="Open the React Native Dev Menu on the device"
-        icon="navicon"
-        compact
+        type="ghost"
         onClick={() => {
           sendCommand('devMenu');
         }}
       />
-    </ButtonGroup>
+    </>
   );
 }
-
-export default connect<Props, {}, {}, State>(({connections: {devices}}) => ({
-  device: devices.find(
-    (device) => device.os === 'Metro' && !device.isArchived,
-  ) as MetroDevice,
-}))(MetroButton);

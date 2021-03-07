@@ -11,9 +11,9 @@ import {Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
 import {registerDeviceCallbackOnPlugins} from '../utils/onRegisterDevice';
 import MetroDevice from '../devices/MetroDevice';
-import {ArchivedDevice} from 'flipper';
 import http from 'http';
 import {addErrorNotification} from '../reducers/notifications';
+import {destroyDevice} from '../reducers/connections';
 
 const METRO_PORT = 8081;
 const METRO_HOST = 'localhost';
@@ -39,7 +39,7 @@ async function isMetroRunning(): Promise<boolean> {
           });
       })
       .on('error', (err: any) => {
-        if (err.code !== 'ECONNREFUSED') {
+        if (err.code !== 'ECONNREFUSED' && err.code !== 'ECONNRESET') {
           console.error('Could not connect to METRO ' + err);
         }
         resolve(false);
@@ -47,7 +47,7 @@ async function isMetroRunning(): Promise<boolean> {
   });
 }
 
-async function registerDevice(
+export async function registerMetroDevice(
   ws: WebSocket | undefined,
   store: Store,
   logger: Logger,
@@ -58,7 +58,10 @@ async function registerDevice(
     name: metroDevice.title,
   });
 
-  metroDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
+  metroDevice.loadDevicePlugins(
+    store.getState().plugins.devicePlugins,
+    store.getState().connections.enabledDevicePlugins,
+  );
   store.dispatch({
     type: 'REGISTER_DEVICE',
     payload: metroDevice,
@@ -71,34 +74,6 @@ async function registerDevice(
     store.getState().plugins.clientPlugins,
     metroDevice,
   );
-}
-
-async function unregisterDevices(store: Store, logger: Logger) {
-  logger.track('usage', 'unregister-device', {
-    os: 'Metro',
-    serial: METRO_URL,
-  });
-
-  let archivedDevice: ArchivedDevice | undefined = undefined;
-  const device = store
-    .getState()
-    .connections.devices.find((device) => device.serial === METRO_URL);
-  if (device && !device.isArchived) {
-    archivedDevice = device.archive();
-  }
-
-  store.dispatch({
-    type: 'UNREGISTER_DEVICES',
-    payload: new Set([METRO_URL]),
-  });
-
-  if (archivedDevice) {
-    archivedDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
-    store.dispatch({
-      type: 'REGISTER_DEVICE',
-      payload: archivedDevice,
-    });
-  }
 }
 
 export default (store: Store, logger: Logger) => {
@@ -117,7 +92,7 @@ export default (store: Store, logger: Logger) => {
       _ws.onopen = () => {
         clearTimeout(guard);
         ws = _ws;
-        registerDevice(ws, store, logger);
+        registerMetroDevice(ws, store, logger);
       };
 
       _ws.onclose = _ws.onerror = () => {
@@ -125,7 +100,7 @@ export default (store: Store, logger: Logger) => {
           unregistered = true;
           clearTimeout(guard);
           ws = undefined;
-          unregisterDevices(store, logger);
+          destroyDevice(store, logger, METRO_URL);
           scheduleNext();
         }
       };
@@ -138,7 +113,7 @@ export default (store: Store, logger: Logger) => {
             `Flipper did find a running Metro instance, but couldn't connect to the logs. Probably your React Native version is too old to support Flipper. Cause: Failed to get a connection to ${METRO_LOGS_ENDPOINT} in a timely fashion`,
           ),
         );
-        registerDevice(undefined, store, logger);
+        registerMetroDevice(undefined, store, logger);
         // Note: no scheduleNext, we won't retry until restart
       }, 5000);
     } else {

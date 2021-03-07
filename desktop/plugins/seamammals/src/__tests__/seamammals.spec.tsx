@@ -7,20 +7,12 @@
  * @format
  */
 
-import * as React from 'react';
-import * as Flipper from 'flipper';
 // eslint-disable-next-line
 import {act} from '@testing-library/react';
 
 {
   // These mocks are needed because seammammals still uses Flipper in its UI implementation,
   // so we need to mock some things
-
-  // @ts-ignore
-  jest.spyOn(Flipper.DetailSidebar, 'type').mockImplementation((props) => {
-    return <div className="DetailsSidebar">{props.children}</div>;
-  });
-
   const origRequestIdleCallback = window.requestIdleCallback;
   const origCancelIdleCallback = window.cancelIdleCallback;
   // @ts-ignore
@@ -100,18 +92,31 @@ test('It can have selection and render details', async () => {
   // Let's assert the structure of the Turtle card as well
   expect(await renderer.findByTestId('Turtle')).toMatchInlineSnapshot(`
     <div
-      class="css-ok7d66-View-FlexBox-FlexColumn"
+      class="ant-card ant-card-bordered ant-card-hoverable"
       data-testid="Turtle"
+      style="width: 150px;"
     >
       <div
-        class="css-vgz97s"
-        style="background-image: url(http://turtle.png);"
-      />
-      <span
-        class="css-8j2gzl-Text"
+        class="ant-card-head"
       >
-        Turtle
-      </span>
+        <div
+          class="ant-card-head-wrapper"
+        >
+          <div
+            class="ant-card-head-title"
+          >
+            Turtle
+          </div>
+        </div>
+      </div>
+      <div
+        class="ant-card-body"
+      >
+        <div
+          class="css-vgz97s"
+          style="background-image: url(http://turtle.png);"
+        />
+      </div>
     </div>
   `);
   // Nothing selected, so we should not have a sidebar

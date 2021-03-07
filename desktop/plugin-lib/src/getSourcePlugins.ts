@@ -11,16 +11,17 @@ import path from 'path';
 import fs from 'fs-extra';
 import expandTilde from 'expand-tilde';
 import {getPluginSourceFolders} from './pluginPaths';
-import {PluginDetails, getPluginDetails} from 'flipper-plugin-lib';
 import pmap from 'p-map';
 import pfilter from 'p-filter';
 import {satisfies} from 'semver';
+import {getInstalledPluginDetails} from './getPluginDetails';
+import {InstalledPluginDetails} from './PluginDetails';
 
 const flipperVersion = require('../package.json').version;
 
-export async function getSourcePlugins(): Promise<PluginDetails[]> {
+export async function getSourcePlugins(): Promise<InstalledPluginDetails[]> {
   const pluginFolders = await getPluginSourceFolders();
-  const entryPoints: {[key: string]: PluginDetails} = {};
+  const entryPoints: {[key: string]: InstalledPluginDetails} = {};
   const additionalPlugins = await pmap(pluginFolders, (path) =>
     entryPointForPluginFolder(path),
   );
@@ -29,11 +30,25 @@ export async function getSourcePlugins(): Promise<PluginDetails[]> {
       entryPoints[key] = p[key];
     });
   }
-  return Object.values(entryPoints);
+  const allPlugins = Object.values(entryPoints);
+  if (process.env.FLIPPER_ENABLED_PLUGINS) {
+    const pluginNames = new Set<string>(
+      process.env.FLIPPER_ENABLED_PLUGINS.split(',').map((x) =>
+        x.toLowerCase(),
+      ),
+    );
+    return allPlugins.filter(
+      (x) =>
+        pluginNames.has(x.name) ||
+        pluginNames.has(x.id) ||
+        pluginNames.has(x.name.replace('flipper-plugin-', '')),
+    );
+  }
+  return allPlugins;
 }
 async function entryPointForPluginFolder(
   pluginsDir: string,
-): Promise<{[key: string]: PluginDetails}> {
+): Promise<{[key: string]: InstalledPluginDetails}> {
   pluginsDir = expandTilde(pluginsDir);
   if (!fs.existsSync(pluginsDir)) {
     return {};
@@ -82,7 +97,7 @@ async function entryPointForPluginFolder(
     .then((packages) =>
       pmap(packages, async ({manifest, dir}) => {
         try {
-          const details = await getPluginDetails(dir, manifest);
+          const details = await getInstalledPluginDetails(dir, manifest);
           if (
             details.flipperSDKVersion &&
             !satisfies(flipperVersion, details.flipperSDKVersion)
@@ -103,7 +118,7 @@ async function entryPointForPluginFolder(
     )
     .then((plugins) => plugins.filter(notNull))
     .then((plugins) =>
-      plugins.reduce<{[key: string]: PluginDetails}>((acc, cv) => {
+      plugins.reduce<{[key: string]: InstalledPluginDetails}>((acc, cv) => {
         acc[cv!.name] = cv!;
         return acc;
       }, {}),

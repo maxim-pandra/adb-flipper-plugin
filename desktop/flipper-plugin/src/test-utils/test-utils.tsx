@@ -14,7 +14,7 @@ import {
   act as testingLibAct,
 } from '@testing-library/react';
 import {queries} from '@testing-library/dom';
-import {PluginDetails} from 'flipper-plugin-lib';
+import {BundledPluginDetails, InstalledPluginDetails} from 'flipper-plugin-lib';
 
 import {
   RealFlipperClient,
@@ -36,6 +36,9 @@ import {
 } from '../plugin/DevicePlugin';
 import {BasePluginInstance} from '../plugin/PluginBase';
 import {FlipperLib} from '../plugin/FlipperLib';
+import {stubLogger} from '../utils/Logger';
+import {Idler} from '../utils/Idler';
+import {createState} from '../state/atom';
 
 type Renderer = RenderResult<typeof queries>;
 
@@ -43,6 +46,13 @@ interface StartPluginOptions {
   initialState?: Record<string, any>;
   isArchived?: boolean;
   isBackgroundPlugin?: boolean;
+  startUnactivated?: boolean;
+  /** Provide a set of unsupported methods to simulate older clients that don't support certain methods yet */
+  unsupportedMethods?: string[];
+  /**
+   * Provide a set of GKs that are enabled in this test.
+   */
+  GKs?: string[];
 }
 
 type ExtractClientType<Module extends FlipperPluginModule<any>> = Parameters<
@@ -87,9 +97,14 @@ interface BasePluginResult {
   triggerDeepLink(deeplink: unknown): void;
 
   /**
-   * Grab all the persistable state
+   * Grab all the persistable state, but will ignore any onExport handler
    */
-  exportState(): any;
+  exportState(): Record<string, any>;
+
+  /**
+   * Grab all the persistable state, respecting onExport handlers
+   */
+  exportStateAsync(): Promise<Record<string, any>>;
 
   /**
    * Trigger menu entry by label
@@ -176,15 +191,30 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
   }
 
   const sendStub = jest.fn();
-  const flipperUtils = createMockFlipperLib();
+  const flipperUtils = createMockFlipperLib(options);
+  const testDevice = createMockDevice(options);
+  const appName = 'TestApplication';
+  const deviceName = 'TestDevice';
   const fakeFlipperClient: RealFlipperClient = {
+    id: `${appName}#${testDevice.os}#${deviceName}#${testDevice.serial}`,
+    plugins: [definition.id],
+    query: {
+      app: appName,
+      device: deviceName,
+      device_id: testDevice.serial,
+      os: testDevice.serial,
+    },
+    deviceSync: testDevice,
     isBackgroundPlugin(_pluginId: string) {
       return !!options?.isBackgroundPlugin;
     },
+    connected: createState(true),
     initPlugin() {
+      this.connected.set(true);
       pluginInstance.connect();
     },
     deinitPlugin() {
+      this.connected.set(false);
       pluginInstance.disconnect();
     },
     call(
@@ -194,6 +224,9 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
       params?: Object,
     ): Promise<Object> {
       return sendStub(method, params);
+    },
+    async supportsMethod(_api: string, method: string) {
+      return !options?.unsupportedMethods?.includes(method);
     },
   };
 
@@ -230,7 +263,9 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
   if (options?.isBackgroundPlugin) {
     pluginInstance.connect(); // otherwise part of activate
   }
-  pluginInstance.activate();
+  if (!options?.startUnactivated) {
+    pluginInstance.activate();
+  }
   return res;
 }
 
@@ -262,7 +297,7 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
   options?: StartPluginOptions,
 ): StartDevicePluginResult<Module> {
   const definition = new SandyPluginDefinition(
-    createMockPluginDetails(),
+    createMockPluginDetails({pluginType: 'device'}),
     module,
   );
   if (!definition.isDevicePlugin) {
@@ -271,8 +306,9 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
     );
   }
 
-  const flipperLib = createMockFlipperLib();
+  const flipperLib = createMockFlipperLib(options);
   const testDevice = createMockDevice(options);
+  testDevice.devicePlugins.push(definition.id);
   const pluginInstance = new SandyDevicePluginInstance(
     flipperLib,
     definition,
@@ -321,10 +357,16 @@ export function renderDevicePlugin<Module extends FlipperDevicePluginModule>(
   };
 }
 
-export function createMockFlipperLib(): FlipperLib {
+export function createMockFlipperLib(options?: StartPluginOptions): FlipperLib {
   return {
+    logger: stubLogger,
     enableMenuEntries: jest.fn(),
     createPaste: jest.fn(),
+    GK(gk: string) {
+      return options?.GKs?.includes(gk) || false;
+    },
+    selectPlugin: jest.fn(),
+    isPluginAvailable: jest.fn().mockImplementation(() => false),
   };
 }
 
@@ -335,7 +377,9 @@ function createBasePluginResult(
     flipperLib: pluginInstance.flipperLib,
     activate: () => pluginInstance.activate(),
     deactivate: () => pluginInstance.deactivate(),
-    exportState: () => pluginInstance.exportState(),
+    exportStateAsync: () =>
+      pluginInstance.exportState(createStubIdler(), () => {}),
+    exportState: () => pluginInstance.exportStateSync(),
     triggerDeepLink: (deepLink: unknown) => {
       pluginInstance.triggerDeepLink(deepLink);
     },
@@ -351,18 +395,37 @@ function createBasePluginResult(
 }
 
 export function createMockPluginDetails(
-  details?: Partial<PluginDetails>,
-): PluginDetails {
+  details?: Partial<InstalledPluginDetails>,
+): InstalledPluginDetails {
   return {
     id: 'TestPlugin',
     dir: '',
     name: 'TestPlugin',
     specVersion: 0,
     entry: '',
-    isDefault: false,
+    isBundled: false,
+    isActivatable: true,
     main: '',
     source: '',
     title: 'Testing Plugin',
+    version: '',
+    ...details,
+  };
+}
+
+export function createMockBundledPluginDetails(
+  details?: Partial<BundledPluginDetails>,
+): BundledPluginDetails {
+  return {
+    id: 'TestBundledPlugin',
+    name: 'TestBundledPlugin',
+    specVersion: 0,
+    pluginType: 'client',
+    isBundled: true,
+    isActivatable: true,
+    main: '',
+    source: '',
+    title: 'Testing Bundled Plugin',
     version: '',
     ...details,
   };
@@ -373,7 +436,10 @@ function createMockDevice(options?: StartPluginOptions): RealFlipperDevice {
   return {
     os: 'Android',
     deviceType: 'emulator',
+    serial: 'serial-000',
     isArchived: !!options?.isArchived,
+    connected: createState(true),
+    devicePlugins: [],
     addLogListener(cb) {
       logListeners.push(cb);
       return (logListeners.length - 1) as any;
@@ -383,6 +449,21 @@ function createMockDevice(options?: StartPluginOptions): RealFlipperDevice {
     },
     addLogEntry(entry: DeviceLogEntry) {
       logListeners.forEach((f) => f?.(entry));
+    },
+  };
+}
+
+function createStubIdler(): Idler {
+  return {
+    shouldIdle() {
+      return false;
+    },
+    idle() {
+      return Promise.resolve();
+    },
+    cancel() {},
+    isCancelled() {
+      return false;
     },
   };
 }

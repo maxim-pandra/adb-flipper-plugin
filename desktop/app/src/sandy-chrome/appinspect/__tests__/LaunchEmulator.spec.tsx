@@ -37,11 +37,11 @@ test('Can render and launch android apps', async () => {
   );
 
   expect(await renderer.findByText(/No emulators/)).toMatchInlineSnapshot(`
-    <span
+    <div
       class="ant-alert-message"
     >
       No emulators available
-    </span>
+    </div>
   `);
 
   act(() => {
@@ -66,5 +66,5 @@ test('Can render and launch android apps', async () => {
   fireEvent.click(renderer.getByText('emulator2'));
   await sleep(1000);
   expect(onClose).toBeCalled();
-  expect(launchEmulator).toBeCalledWith('emulator2');
+  expect(launchEmulator).toBeCalledWith('emulator2', false);
 });

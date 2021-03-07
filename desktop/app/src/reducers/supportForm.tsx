@@ -10,21 +10,17 @@
 import {Actions, Store} from './';
 import {setStaticView} from './connections';
 import {deconstructClientId} from '../utils/clientUtils';
-import {starPlugin as setStarPlugin} from './connections';
+import {switchPlugin} from './pluginManager';
 import {showStatusUpdatesForDuration} from '../utils/promiseTimeout';
 import {selectedPlugins as setSelectedPlugins} from './plugins';
-import {getEnabledOrExportPersistedStatePlugins} from '../utils/pluginUtils';
 import {addStatusMessage, removeStatusMessage} from './application';
 import constants from '../fb-stubs/constants';
 import {getInstance} from '../fb-stubs/Logger';
 import {logPlatformSuccessRate} from '../utils/metrics';
-import {getActivePersistentPlugins} from '../utils/pluginUtils';
+import {getExportablePlugins} from '../utils/pluginUtils';
 export const SUPPORT_FORM_PREFIX = 'support-form-v2';
-import {State as PluginStatesState} from './pluginStates';
-import {State as PluginsState} from '../reducers/plugins';
-import {State as PluginMessageQueueState} from '../reducers/pluginMessageQueue';
 import Client from '../Client';
-import {OS} from '../devices/BaseDevice';
+import BaseDevice, {OS} from '../devices/BaseDevice';
 
 const {DEFAULT_SUPPORT_GROUP} = constants;
 
@@ -49,6 +45,7 @@ export class Group {
     defaultPlugins: Array<string>,
     supportedOS: Array<OS>,
     deeplinkSuffix: string,
+    papercuts?: string,
   ) {
     this.name = name;
     this.requiredPlugins = requiredPlugins;
@@ -56,6 +53,7 @@ export class Group {
     this.workplaceGroupID = workplaceGroupID;
     this.supportedOS = supportedOS;
     this.deeplinkSuffix = deeplinkSuffix;
+    this.papercuts = papercuts;
   }
   readonly name: string;
   requiredPlugins: Array<string>;
@@ -63,6 +61,7 @@ export class Group {
   workplaceGroupID: number;
   supportedOS: Array<OS>;
   deeplinkSuffix: string;
+  papercuts?: string;
 
   getPluginsToSelect(): Array<string> {
     return Array.from(
@@ -96,14 +95,16 @@ export class Group {
 
     // OS validation
     let osError: string | null = null;
-    if (!selectedOS) {
-      osError = 'Please select an app from the drop down.';
-    } else if (!this.supportedOS.includes(selectedOS)) {
-      osError = `The group ${
-        this.name
-      } supports exports from ${this.supportedOS.join(
-        ', ',
-      )}. But your selected device's OS is ${selectedOS}, which is unsupported.`;
+    if (this.name !== 'Flipper') {
+      if (!selectedOS) {
+        osError = 'Please select an app from the drop down.';
+      } else if (!this.supportedOS.includes(selectedOS)) {
+        osError = `The group ${
+          this.name
+        } supports exports from ${this.supportedOS.join(
+          ', ',
+        )}. But your selected device's OS is ${selectedOS}, which is unsupported.`;
+      }
     }
     return {plugins: str, os: osError};
   }
@@ -124,7 +125,7 @@ export class Group {
     if (selectedApp) {
       const {app} = deconstructClientId(selectedApp);
       const enabledPlugins: Array<string> | null = store.getState().connections
-        .userStarredPlugins[app];
+        .enabledPlugins[app];
       const unsupportedPlugins = [];
       for (const requiredPlugin of this.requiredPlugins) {
         const requiredPluginEnabled =
@@ -138,7 +139,7 @@ export class Group {
             store.getState().plugins.clientPlugins.get(requiredPlugin) ||
             store.getState().plugins.devicePlugins.get(requiredPlugin)!;
           store.dispatch(
-            setStarPlugin({
+            switchPlugin({
               selectedApp: app,
               plugin,
             }),
@@ -192,13 +193,11 @@ export class Group {
         selectedGroup: this,
       }),
     );
-    const pluginsList = selectedClient
-      ? getEnabledOrExportPersistedStatePlugins(
-          store.getState().connections.userStarredPlugins,
-          selectedClient,
-          store.getState().plugins,
-        )
-      : [];
+    const pluginsList = getExportablePlugins(
+      store.getState(),
+      store.getState().connections.selectedDevice ?? undefined,
+      selectedClient,
+    );
 
     store.dispatch(
       setSelectedPlugins(
@@ -220,17 +219,11 @@ export class Group {
   }
 
   getWarningMessage(
-    plugins: PluginsState,
-    pluginsState: PluginStatesState,
-    pluginsMessageQueue: PluginMessageQueueState,
+    state: Parameters<typeof getExportablePlugins>[0],
+    device: BaseDevice | undefined,
     client: Client,
   ): string | null {
-    const activePersistentPlugins = getActivePersistentPlugins(
-      pluginsState,
-      pluginsMessageQueue,
-      plugins,
-      client,
-    );
+    const activePersistentPlugins = getExportablePlugins(state, device, client);
     const emptyPlugins: Array<string> = [];
     for (const plugin of this.requiredPlugins) {
       if (
@@ -261,6 +254,7 @@ const DEFAULT_GROUP = new Group(
   DEFAULT_SUPPORT_GROUP.defaultPlugins,
   DEFAULT_SUPPORT_GROUP.supportedOS,
   DEFAULT_SUPPORT_GROUP.deeplinkSuffix,
+  DEFAULT_SUPPORT_GROUP.papercuts,
 );
 
 export const SUPPORTED_GROUPS: Array<Group> = [
@@ -273,6 +267,7 @@ export const SUPPORTED_GROUPS: Array<Group> = [
       defaultPlugins,
       supportedOS,
       deeplinkSuffix,
+      papercuts,
     }) => {
       return new Group(
         name,
@@ -281,6 +276,7 @@ export const SUPPORTED_GROUPS: Array<Group> = [
         defaultPlugins,
         supportedOS,
         deeplinkSuffix,
+        papercuts,
       );
     },
   ),

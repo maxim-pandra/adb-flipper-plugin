@@ -19,7 +19,7 @@ import {
   Button,
   FlexBox,
   Checkbox,
-} from 'flipper';
+} from '../ui';
 import React, {Component} from 'react';
 import {connect} from 'react-redux';
 import {State as Store} from '../reducers';
@@ -222,7 +222,7 @@ function hasNewProblems(result: HealthcheckResult) {
   return hasProblems(result) && !result.isAcknowledged;
 }
 
-export type State = {
+type State = {
   acknowledgeCheckboxVisible: boolean;
   acknowledgeOnClose?: boolean;
   selectedCheckKey?: string;

@@ -12,6 +12,7 @@ const fbjs = require('eslint-config-fbjs');
 // enforces copy-right header and @format directive to be present in every file
 const pattern = /^\*\r?\n[\S\s]*Facebook[\S\s]* \* @format\r?\n/;
 
+// This list should match the replacements defined in `replace-flipper-requires.ts` and `dispatcher/plugins.tsx`
 const builtInModules = [
   'fb-qpl-xplat',
   'flipper',
@@ -21,8 +22,10 @@ const builtInModules = [
   'react-dom',
   'electron',
   'adbkit',
+  'antd',
   'immer',
   '@emotion/styled',
+  '@ant-design/icons',
 ];
 
 const prettierConfig = require('./.prettierrc.json');
@@ -43,9 +46,12 @@ module.exports = {
   ],
   rules: {
     // disable rules from eslint-config-fbjs
+    'flowtype/define-flow-type': 0,
+    'flowtype/use-flow-type': 0,
     'react/react-in-jsx-scope': 0, // not needed with our metro implementation
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
+    'react/jsx-key': 'error',
     'no-new': 0, // new keyword needed e.g. new Notification
     'no-catch-shadow': 0, // only relevant for IE8 and below
     'no-bitwise': 0, // bitwise operations needed in some places
@@ -63,15 +69,22 @@ module.exports = {
     'no-unsafe-negation': 2,
     'no-useless-computed-key': 2,
     'no-useless-rename': 2,
+    'no-restricted-properties': [
+      1,
+      {
+        object: 'electron',
+        property: 'remote',
+      },
+    ],
 
     // additional rules for this project
     'header/header': [2, 'block', {pattern}],
     'prettier/prettier': [2, prettierConfig],
-    'flowtype/object-type-delimiter': [0],
     'import/no-unresolved': [2, {commonjs: true, amd: true}],
     'node/no-extraneous-import': [2, {allowModules: builtInModules}],
     'node/no-extraneous-require': [2, {allowModules: builtInModules}],
     'flipper/no-relative-imports-across-packages': [2],
+    'flipper/no-electron-remote-imports': [1],
   },
   settings: {
     'import/resolver': {

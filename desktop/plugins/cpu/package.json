@@ -2,7 +2,15 @@
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-device-cpu",
   "id": "DeviceCPU",
-  "version": "0.60.0",
+  "pluginType": "device",
+  "supportedDevices": [
+    {
+      "os": "Android",
+      "type": "physical",
+      "archived": false
+    }
+  ],
+  "version": "0.0.0",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",

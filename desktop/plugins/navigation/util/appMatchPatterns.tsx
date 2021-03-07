@@ -11,6 +11,14 @@ import fs from 'fs';
 import path from 'path';
 import {BaseDevice, AndroidDevice, IOSDevice} from 'flipper';
 import {AppMatchPattern} from '../types';
+import {remote} from 'electron';
+
+let patternsPath: string | undefined;
+
+function getPatternsBasePath() {
+  return (patternsPath =
+    patternsPath ?? path.join(remote.app.getAppPath(), 'facebook'));
+}
 
 const extractAppNameFromSelectedApp = (selectedApp: string | null) => {
   if (selectedApp == null) {
@@ -35,8 +43,8 @@ export const getAppMatchPatterns = (
       } else {
         return;
       }
-      const patternsPath = path.join('facebook', filename);
-      fs.readFile(patternsPath, (err, data) => {
+      const patternsFilePath = path.join(getPatternsBasePath(), filename);
+      fs.readFile(patternsFilePath, (err, data) => {
         if (err) {
           reject(err);
         } else {
@@ -44,7 +52,8 @@ export const getAppMatchPatterns = (
         }
       });
     } else if (appName != null) {
-      reject(new Error('No rule for app ' + appName));
+      console.log('No rule for app ' + appName);
+      resolve([]);
     } else {
       reject(new Error('selectedApp was null'));
     }

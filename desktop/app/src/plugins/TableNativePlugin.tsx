@@ -33,7 +33,8 @@ import textContent from '../utils/textContent';
 import createPaste from '../fb-stubs/createPaste';
 import {ReactNode} from 'react';
 import React from 'react';
-import {KeyboardActions} from 'app/src/MenuBar';
+import {KeyboardActions} from '../MenuBar';
+import {BundledPluginDetails} from 'flipper-plugin-lib';
 
 type ID = string;
 
@@ -255,6 +256,21 @@ export default function createTableNativePlugin(id: string, title: string) {
     static id = id || '';
     static title = title || '';
 
+    static details: BundledPluginDetails = {
+      id,
+      title,
+      icon: 'apps',
+      name: id,
+      pluginType: 'client',
+      // all hmm...
+      specVersion: 1,
+      version: 'auto',
+      source: '',
+      main: '',
+      isBundled: true,
+      isActivatable: true,
+    };
+
     static defaultPersistedState: PersistedState = {
       rows: [],
       datas: {},
@@ -338,6 +354,10 @@ export default function createTableNativePlugin(id: string, title: string) {
 
     getTableMetadata = () => {
       if (!this.props.persistedState.tableMetadata) {
+        if (!this.client.isConnected) {
+          this.setState({error: 'Application disconnected'});
+          return;
+        }
         this.client
           .call('getMetadata')
           .then((metadata) => {
