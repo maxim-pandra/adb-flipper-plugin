@@ -43,10 +43,6 @@ const Status = styled(Text)({
 
 export default class Example extends FlipperDevicePlugin<State, any, any> {
 
-    static supportsDevice(device: Device) {
-        return device.os === 'Android';
-    }
-
     constructor(props: any) {
         super(props)
 
