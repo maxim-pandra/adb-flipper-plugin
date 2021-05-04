@@ -8,7 +8,7 @@ import { NameForm } from './NameForm'
 type ShellCallBack = (output: string) => any;
 
 type State = {
-    applicationId: string;
+    // applicationId: string;
     inputText: string;
 };
 
@@ -46,13 +46,16 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
     constructor(props: any) {
         super(props)
 
-        this.state = { applicationId: PACKAGE_NAME, inputText: '' };
+        this.state = {inputText: ''};
+        // this.props.setPersistedState();
         this.handleChange = this.handleChange.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
     }
 
     init() {
     }
+
+    static defaultPersistedState = { applicationId: PACKAGE_NAME };
 
     handleChange(event: any) {
         console.log('hadleChange called ' + event)
@@ -61,7 +64,7 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
 
     handleSubmit(event: any) {
         console.log('hadleSubmit called ' + event)
-        this.setState({applicationId: this.state.inputText})
+        this.props.setPersistedState({applicationId: this.state.inputText})
         event.preventDefault();
     }
 
@@ -78,23 +81,23 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
     adbBridge = new AdbBridge(this.executeShell);
 
     restartApp = () => {
-        new RestartCommand(this.adbBridge, this.state.applicationId).execute();
+        new RestartCommand(this.adbBridge, this.props.persistedState.applicationId).execute();
     }
 
     clearData = () => {
-        new ClearDataCommand(this.adbBridge, this.state.applicationId).execute();
+        new ClearDataCommand(this.adbBridge, this.props.persistedState.applicationId).execute();
     }
 
     clearDataAndRestart = () => {
-        new ClearDataAndRestartCommand(this.adbBridge, this.state.applicationId).execute();
+        new ClearDataAndRestartCommand(this.adbBridge, this.props.persistedState.applicationId).execute();
     }
 
     killApp = () => {
-        new KillCommand(this.adbBridge, this.state.applicationId).execute();
+        new KillCommand(this.adbBridge, this.props.persistedState.applicationId).execute();
     }
 
     uninstallApp = () => {
-        new UninstallCommand(this.adbBridge, this.state.applicationId).execute();
+        new UninstallCommand(this.adbBridge, this.props.persistedState.applicationId).execute();
     }
 
     revokePermissions = () => {
@@ -107,7 +110,7 @@ export default class Example extends FlipperDevicePlugin<State, any, any> {
                 <Heading level={1}>Meet ADB Flipper</Heading>
                 <NameForm value={this.state.inputText} handleChange={this.handleChange} handleSubmit={this.handleSubmit}/>
                 <MyView>
-                    <Text>{`AppId: ${this.state.applicationId}`}</Text>
+                    <Text>{`AppId: ${this.props.persistedState.applicationId}`}</Text>
                 </MyView>
                 <Button style={{width: 200}}  onClick={this.restartApp.bind(this)}>Restart app</Button>
                 <Button style={{width: 200}} onClick={this.clearData.bind(this)}>Clear App Data</Button>
