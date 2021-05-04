@@ -52,14 +52,15 @@ const siteConfig = {
           position: 'right',
         },
         {
-          href: repoUrl,
-          label: 'GitHub',
-          position: 'right',
-        },
-        {
           to: 'docs/internals/index',
           label: 'Under the Hood',
           position: 'right',
+        },
+        {
+          href: repoUrl,
+          position: 'right',
+          'aria-label': 'GitHub repository',
+          className: 'navbar-github-link',
         },
       ],
     },
@@ -143,7 +144,7 @@ const siteConfig = {
       },
     }),
     prism: {
-      additionalLanguages: ['groovy', 'java', 'kotlin', 'ruby', 'swift'],
+      additionalLanguages: ['groovy', 'java', 'kotlin', 'ruby', 'swift', 'objectivec'],
     },
   },
   favicon: 'img/icon.png',

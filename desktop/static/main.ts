@@ -18,6 +18,7 @@ import {
   globalShortcut,
   session,
 } from 'electron';
+import os from 'os';
 import path from 'path';
 import url from 'url';
 import fs from 'fs';
@@ -27,6 +28,7 @@ import setup from './setup';
 import isFB from './fb-stubs/isFB';
 import delegateToLauncher from './launcher';
 import yargs from 'yargs';
+import {promisify} from 'util';
 
 const VERSION: string = (global as any).__VERSION__;
 
@@ -169,7 +171,7 @@ app.on('will-finish-launching', () => {
 
 app.on('ready', () => {
   // If we delegate to the launcher, shut down this instance of the app.
-  delegateToLauncher(argv).then((hasLauncherInvoked: boolean) => {
+  delegateToLauncher(argv).then(async (hasLauncherInvoked: boolean) => {
     if (hasLauncherInvoked) {
       app.quit();
       return;
@@ -185,8 +187,39 @@ app.on('ready', () => {
         REACT_DEVELOPER_TOOLS,
         REDUX_DEVTOOLS,
       } = require('electron-devtools-installer');
-      installExtension(REACT_DEVELOPER_TOOLS.id);
-      installExtension(REDUX_DEVTOOLS.id);
+      // if set, try to download a newever version of the dev tools
+      const forceDownload = process.env.FLIPPER_UPDATE_DEV_TOOLS === 'true';
+      if (forceDownload) {
+        console.log('Force updating DevTools');
+      }
+      // Redux
+      await installExtension(REDUX_DEVTOOLS.id).catch((e: any) => {
+        console.error('Failed to install Redux devtools extension', e);
+      }, forceDownload);
+      // React
+      // Fix for extension loading (see D27685981)
+      // Work around per https://github.com/electron/electron/issues/23662#issuecomment-787420799
+      const reactDevToolsPath = `${os.homedir()}/Library/Application Support/Electron/extensions/${
+        REACT_DEVELOPER_TOOLS.id
+      }`;
+      if (await promisify(fs.exists)(reactDevToolsPath)) {
+        console.log('Loading React devtools from disk ' + reactDevToolsPath);
+        await session.defaultSession
+          .loadExtension(
+            reactDevToolsPath,
+            // @ts-ignore only supported (and needed) in Electron 12
+            {allowFileAccess: true},
+          )
+          .catch((e) => {
+            console.error('Failed to loa React devtools from disk: ', e);
+          });
+      } else {
+        await installExtension(REACT_DEVELOPER_TOOLS.id, {
+          loadExtensionOptions: {allowFileAccess: true, forceDownload},
+        }).catch((e: any) => {
+          console.error('Failed to install React devtools extension', e);
+        });
+      }
     }
   });
 });
@@ -279,6 +312,12 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     center: true,
+    // The app icon is defined in package.json by default.
+    // When building Linux zip, it must be defined here or else it won't work.
+    icon:
+      os.platform() === 'linux'
+        ? path.join(__dirname, 'icons/app_64x64.png')
+        : undefined,
     webPreferences: {
       enableRemoteModule: true,
       backgroundThrottling: false,
@@ -288,6 +327,7 @@ function createWindow() {
       nodeIntegration: true,
       webviewTag: true,
       nativeWindowOpen: true,
+      contextIsolation: false,
     },
   });
   win.once('ready-to-show', () => {

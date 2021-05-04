@@ -8,9 +8,17 @@
  */
 
 import React from 'react';
-import {Typography, Card, Table, Collapse, Button, Tabs} from 'antd';
+import {Typography, Card, Table, Collapse, Button} from 'antd';
 import {Layout, Link} from '../ui';
-import {NUX, theme, Tracked, TrackingScope} from 'flipper-plugin';
+import {
+  NUX,
+  Panel,
+  theme,
+  Tracked,
+  TrackingScope,
+  Tabs,
+  Tab,
+} from 'flipper-plugin';
 import reactElementToJSXString from 'react-element-to-jsx-string';
 import {CodeOutlined} from '@ant-design/icons';
 
@@ -213,7 +221,7 @@ const demos: PreviewProps[] = [
   {
     title: 'Layout.Top|Left|Right|Bottom',
     description:
-      "Divides all available space over two children. The (top|left|right|bottom)-most first child will keep it's own dimensions, and positioned (top|left|right|bottom) of the other child. All remaining space will be assigned to the remaining child.",
+      "Divides all available space over two children. The (top|left|right|bottom)-most first child will keep it's own dimensions, and positioned (top|left|right|bottom) of the other child. All remaining space will be assigned to the remaining child. If you are using a Layout.Right at the top level of your plugin, consider using DetailSidebar component instead, which will move its children to the right sidebar of Flipper.",
     props: [
       [
         'scrollable',
@@ -224,6 +232,21 @@ const demos: PreviewProps[] = [
         'center',
         'boolean (false)',
         'If set, all children will use their own height, and they will be centered vertically in the layout. If not set, all children will be stretched to the height of the layout.',
+      ],
+      [
+        'gap',
+        'true / number (0)',
+        'Set the spacing between children. If just set, theme.space.small will be used.',
+      ],
+      [
+        'resizable',
+        'true / undefined',
+        'If set, this split container will be resizable by the user. It is recommend to set width, maxWidth, minWidth respectively height, maxHeight, minHeight properties as well.',
+      ],
+      [
+        'width / height / minWidth  / minHeight / maxWidth / maxHeight',
+        'number / undefined',
+        'These dimensions in pixels will be used for clamping if the layout is marked as resizable',
       ],
     ],
     demos: {
@@ -267,20 +290,107 @@ const demos: PreviewProps[] = [
           </Layout.Left>
         </Layout.Container>
       ),
-      'Layout.Right + Layout.ScrollContainer': (
+      'Layout.Right resizable + Layout.ScrollContainer': (
         <Layout.Container style={{height: 150}}>
-          <Layout.Right>
+          <Layout.Right resizable>
             <Layout.ScrollContainer>{largeChild}</Layout.ScrollContainer>
-            {aFixedWidthBox}
+            {aDynamicBox}
           </Layout.Right>
         </Layout.Container>
       ),
-      'Layout.Bottom + Layout.ScrollContainer': (
+      'Layout.Bottom resizable + Layout.ScrollContainer': (
         <Layout.Container style={{height: 150}}>
-          <Layout.Bottom>
+          <Layout.Bottom resizable height={50} minHeight={20}>
             <Layout.ScrollContainer>{largeChild}</Layout.ScrollContainer>
-            {aFixedHeightBox}
+            {aDynamicBox}
           </Layout.Bottom>
+        </Layout.Container>
+      ),
+    },
+  },
+  {
+    title: 'Panel',
+    description:
+      'A collapsible UI region. The collapsed state of the pane will automatically be persisted so that the collapsed state is restored the next time user visits the plugin again. Note that the children of a Panel should have some size, either a fixed or a natural size. Elements that grow to their parent size will become invisible.',
+    props: [
+      ['title', 'string', 'Title of the pane'],
+      [
+        'collapsible',
+        'boolean (true)',
+        "If set to false it won't be possible to collapse the panel",
+      ],
+      [
+        'collapsed',
+        'boolean (false)',
+        'The initial collapsed state of the panel.',
+      ],
+      [
+        'pad / gap',
+        'boolean / number (false)',
+        'See the pad property of Layout.Container, determines whether the pane contents will have some padding and space between the items. By default no padding / gap is applied.',
+      ],
+    ],
+    demos: {
+      'Two panels in a fixed height container': (
+        <Layout.Container>
+          <Panel title="Panel 1">Some content</Panel>
+          <Panel title="Panel 2 (collapsed)" collapsed>
+            {aFixedHeightBox}
+          </Panel>
+          <Panel
+            title="Panel 3 (not collapsible, pad, gap)"
+            collapsible={false}
+            pad
+            gap>
+            {aFixedHeightBox}
+            {aFixedHeightBox}
+          </Panel>
+        </Layout.Container>
+      ),
+    },
+  },
+  {
+    title: 'Tabs / Tab',
+    description:
+      "Tabs represents a tab control and all it's children should be Tab components. By default the Tab control uses all available space, but set grow=false to only use the minimally required space",
+    props: [
+      [
+        'grow (Tabs)',
+        'boolean (true)',
+        'If true, the tab control will grow all tabs to the maximum available vertical space. If false, only the minimal required (natural) vertical space will be used',
+      ],
+      [
+        'pad / gap (Tab)',
+        'boolean / number (false)',
+        'See the pad property of Layout.Container, determines whether the pane contents will have some padding and space between the items. By default no padding / gap is applied.',
+      ],
+      [
+        'other props',
+        '',
+        'This component wraps Tabs from ant design, see https://ant.design/components/tabs/ for more details',
+      ],
+    ],
+    demos: {
+      'Two tabs': (
+        <Layout.Container height={200}>
+          <Tabs>
+            <Tab tab="Pane 1">{aDynamicBox}</Tab>
+            <Tab tab="Pane 2 pad gap" pad gap>
+              {aFixedHeightBox}
+              {aFixedHeightBox}
+            </Tab>
+          </Tabs>
+        </Layout.Container>
+      ),
+      'Two tabs (no grow)': (
+        <Layout.Container grow={false}>
+          <Tabs>
+            <Tab tab="Pane 1">{aDynamicBox}</Tab>
+            <Tab tab="Pane 2 pad gap" pad gap>
+              {aFixedHeightBox}
+              {aFixedHeightBox}
+            </Tab>
+          </Tabs>
         </Layout.Container>
       ),
     },
@@ -364,7 +474,7 @@ function ComponentPreview({title, demos, description, props}: PreviewProps) {
               <Layout.Container gap="large">
                 {Object.entries(demos).map(([name, children]) => (
                   <Tabs type="line" key={name}>
-                    <Tabs.TabPane tab={name} key="1">
+                    <Tab tab={name} key="1">
                       <div
                         style={{
                           background: theme.backgroundWash,
@@ -372,8 +482,8 @@ function ComponentPreview({title, demos, description, props}: PreviewProps) {
                         }}>
                         {children}
                       </div>
-                    </Tabs.TabPane>
-                    <Tabs.TabPane tab={<CodeOutlined />} key="2">
+                    </Tab>
+                    <Tab tab={<CodeOutlined />} key="2">
                       <div
                         style={{
                           background: theme.backgroundWash,
@@ -382,7 +492,7 @@ function ComponentPreview({title, demos, description, props}: PreviewProps) {
                         }}>
                         <pre>{reactElementToJSXString(children)}</pre>
                       </div>
-                    </Tabs.TabPane>
+                    </Tab>
                   </Tabs>
                 ))}
               </Layout.Container>

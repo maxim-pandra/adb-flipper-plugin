@@ -9,7 +9,7 @@
 
 import BaseDevice from './BaseDevice';
 import adb, {Client as ADBClient} from 'adbkit';
-import {Priority} from 'adbkit-logcat';
+import {Priority, Reader} from 'adbkit-logcat';
 import {createWriteStream} from 'fs';
 import type {LogLevel, DeviceType} from 'flipper-plugin';
 import which from 'which';
@@ -20,6 +20,13 @@ import {DeviceSpec} from 'flipper-plugin-lib';
 const DEVICE_RECORDING_DIR = '/sdcard/flipper_recorder';
 
 export default class AndroidDevice extends BaseDevice {
+  adb: ADBClient;
+  abiList: Array<string> = [];
+  sdkVersion: string | undefined = undefined;
+  pidAppMapping: {[key: number]: string} = {};
+  private recordingProcess?: Promise<string>;
+  reader?: Reader;
+
   constructor(
     serial: string,
     deviceType: DeviceType,
@@ -34,45 +41,70 @@ export default class AndroidDevice extends BaseDevice {
     this.icon = 'mobile';
     this.abiList = abiList;
     this.sdkVersion = sdkVersion;
-    this.adb.openLogcat(this.serial).then((reader) => {
-      reader.on('entry', (entry) => {
-        let type: LogLevel = 'unknown';
-        if (entry.priority === Priority.VERBOSE) {
-          type = 'verbose';
-        }
-        if (entry.priority === Priority.DEBUG) {
-          type = 'debug';
-        }
-        if (entry.priority === Priority.INFO) {
-          type = 'info';
-        }
-        if (entry.priority === Priority.WARN) {
-          type = 'warn';
-        }
-        if (entry.priority === Priority.ERROR) {
-          type = 'error';
-        }
-        if (entry.priority === Priority.FATAL) {
-          type = 'fatal';
-        }
-
-        this.addLogEntry({
-          tag: entry.tag,
-          pid: entry.pid,
-          tid: entry.tid,
-          message: entry.message,
-          date: entry.date,
-          type,
-        });
-      });
-    });
   }
 
-  adb: ADBClient;
-  abiList: Array<string> = [];
-  sdkVersion: string | undefined = undefined;
-  pidAppMapping: {[key: number]: string} = {};
-  private recordingProcess?: Promise<string>;
+  startLogging() {
+    this.adb
+      .openLogcat(this.serial, {clear: true})
+      .then((reader) => {
+        this.reader = reader;
+        reader
+          .on('entry', (entry) => {
+            let type: LogLevel = 'unknown';
+            if (entry.priority === Priority.VERBOSE) {
+              type = 'verbose';
+            }
+            if (entry.priority === Priority.DEBUG) {
+              type = 'debug';
+            }
+            if (entry.priority === Priority.INFO) {
+              type = 'info';
+            }
+            if (entry.priority === Priority.WARN) {
+              type = 'warn';
+            }
+            if (entry.priority === Priority.ERROR) {
+              type = 'error';
+            }
+            if (entry.priority === Priority.FATAL) {
+              type = 'fatal';
+            }
+
+            this.addLogEntry({
+              tag: entry.tag,
+              pid: entry.pid,
+              tid: entry.tid,
+              message: entry.message,
+              date: entry.date,
+              type,
+            });
+          })
+          .on('end', () => {
+            if (this.reader) {
+              // logs didn't stop gracefully
+              setTimeout(() => {
+                if (this.connected.get()) {
+                  console.warn(
+                    `Log stream broken: ${this.serial} - restarting`,
+                  );
+                  this.startLogging();
+                }
+              }, 100);
+            }
+          })
+          .on('error', (e) => {
+            console.warn('Failed to read from adb logcat: ', e);
+          });
+      })
+      .catch((e) => {
+        console.warn('Failed to open log stream: ', e);
+      });
+  }
+
+  stopLogging() {
+    this.reader?.end();
+    this.reader = undefined;
+  }
 
   reverse(ports: [number, number]): Promise<void> {
     return Promise.all(
@@ -217,6 +249,13 @@ export default class AndroidDevice extends BaseDevice {
     this.recordingProcess = undefined;
     return destination;
   }
+
+  disconnect() {
+    if (this.recordingProcess) {
+      this.stopScreenCapture();
+    }
+    super.disconnect();
+  }
 }
 
 export async function launchEmulator(name: string, coldBoot: boolean = false) {
@@ -234,12 +273,12 @@ export async function launchEmulator(name: string, coldBoot: boolean = false) {
           },
         );
         child.stderr.on('data', (data) => {
-          console.error(`Android emulator error: ${data}`);
+          console.warn(`Android emulator stderr: ${data}`);
         });
-        child.on('error', (e) => console.error(e));
+        child.on('error', (e) => console.warn('Android emulator error:', e));
       } else {
         throw new Error('Could not get emulator path');
       }
     })
-    .catch((e) => console.error(e));
+    .catch((e) => console.error('Android emulator startup failed:', e));
 }

@@ -12,7 +12,6 @@ import {
   FlipperDevicePlugin,
   Props as PluginProps,
   PluginDefinition,
-  isSandyPlugin,
 } from './plugin';
 import {Logger} from './fb-interfaces/Logger';
 import BaseDevice from './devices/BaseDevice';
@@ -47,10 +46,10 @@ import {IdlerImpl} from './utils/Idler';
 import {processMessageQueue} from './utils/messageQueue';
 import {ToggleButton, SmallText, Layout} from './ui';
 import {theme, TrackingScope, _SandyPluginRenderer} from 'flipper-plugin';
-import {isDevicePluginDefinition} from './utils/pluginUtils';
+import {isDevicePluginDefinition, isSandyPlugin} from './utils/pluginUtils';
 import {ContentContainer} from './sandy-chrome/ContentContainer';
 import {Alert, Typography} from 'antd';
-import {InstalledPluginDetails} from 'plugin-lib';
+import {InstalledPluginDetails} from 'flipper-plugin-lib';
 import semver from 'semver';
 import {loadPlugin} from './reducers/pluginManager';
 import {produce} from 'immer';
@@ -66,7 +65,7 @@ const Container = styled(FlexColumn)({
 });
 
 export const SidebarContainer = styled(FlexRow)({
-  backgroundColor: colors.light02,
+  backgroundColor: theme.backgroundWash,
   height: '100%',
   overflow: 'auto',
 });

@@ -8,7 +8,7 @@
  */
 
 import React, {useCallback, useMemo, useState} from 'react';
-import {Layout, theme} from 'flipper-plugin';
+import {Layout, theme, Notification as NotificationData} from 'flipper-plugin';
 import {styled, Glyph} from '../../ui';
 import {Input, Typography, Button, Collapse, Dropdown, Menu} from 'antd';
 import {
@@ -20,7 +20,6 @@ import {
   EllipsisOutlined,
 } from '@ant-design/icons';
 import {LeftSidebar, SidebarTitle} from '../LeftSidebar';
-import {Notification as NotificationData} from '../../plugin';
 import {useStore, useDispatch} from '../../utils/useStore';
 import {ClientQuery} from '../../Client';
 import {deconstructClientId} from '../../utils/clientUtils';
@@ -31,7 +30,7 @@ import {
   updatePluginBlocklist,
 } from '../../reducers/notifications';
 import {filterNotifications} from './notificationUtils';
-import {useMemoize} from '../../utils/useMemoize';
+import {useMemoize} from 'flipper-plugin';
 import BlocklistSettingButton from './BlocklistSettingButton';
 
 type NotificationExtra = {
@@ -69,7 +68,7 @@ function DetailCollapse({detail}: {detail: string | React.ReactNode}) {
       <Paragraph
         type="secondary"
         style={{
-          fontSize: theme.fontSize.smallBody,
+          fontSize: theme.fontSize.small,
           marginBottom: 0,
         }}
         ellipsis={{rows: 3}}>
@@ -92,7 +91,7 @@ function DetailCollapse({detail}: {detail: string | React.ReactNode}) {
         <Collapse.Panel
           key="detail"
           header={
-            <Text type="secondary" style={{fontSize: theme.fontSize.smallBody}}>
+            <Text type="secondary" style={{fontSize: theme.fontSize.small}}>
               View detail
             </Text>
           }>
@@ -149,14 +148,14 @@ function NotificationEntry({notification}: {notification: PluginNotification}) {
       <Layout.Right center>
         <Layout.Horizontal gap="tiny" center>
           {icon}
-          <Text style={{fontSize: theme.fontSize.smallBody}}>{pluginName}</Text>
+          <Text style={{fontSize: theme.fontSize.small}}>{pluginName}</Text>
         </Layout.Horizontal>
         {actions}
       </Layout.Right>
       <Title level={4} ellipsis={{rows: 2}}>
         {title}
       </Title>
-      <Text type="secondary" style={{fontSize: theme.fontSize.smallBody}}>
+      <Text type="secondary" style={{fontSize: theme.fontSize.small}}>
         {clientName && appName
           ? `${clientName}/${appName}`
           : clientName ?? appName ?? 'Not Connected'}

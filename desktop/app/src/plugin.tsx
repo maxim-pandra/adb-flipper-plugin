@@ -11,7 +11,7 @@ import {KeyboardActions} from './MenuBar';
 import {Logger} from './fb-interfaces/Logger';
 import Client from './Client';
 import {Store} from './reducers/index';
-import {ReactNode, Component} from 'react';
+import {Component} from 'react';
 import BaseDevice from './devices/BaseDevice';
 import {serialize, deserialize} from './utils/serialization';
 import {StaticView} from './reducers/connections';
@@ -19,7 +19,7 @@ import {State as ReduxState} from './reducers';
 import {DEFAULT_MAX_QUEUE_SIZE} from './reducers/pluginMessageQueue';
 import {ActivatablePluginDetails} from 'flipper-plugin-lib';
 import {Settings} from './reducers/settings';
-import {Idler, _SandyPluginDefinition} from 'flipper-plugin';
+import {Notification, Idler, _SandyPluginDefinition} from 'flipper-plugin';
 
 type Parameters = {[key: string]: any};
 
@@ -35,12 +35,6 @@ export type ClientPluginDefinition =
 
 export type ClientPluginMap = Map<string, ClientPluginDefinition>;
 export type DevicePluginMap = Map<string, DevicePluginDefinition>;
-
-export function isSandyPlugin(
-  plugin?: PluginDefinition | null,
-): plugin is _SandyPluginDefinition {
-  return plugin instanceof _SandyPluginDefinition;
-}
 
 // This function is intended to be called from outside of the plugin.
 // If you want to `call` from the plugin use, this.client.call
@@ -73,16 +67,6 @@ export interface PluginClient {
 }
 
 type PluginTarget = BaseDevice | Client;
-
-export type Notification = {
-  id: string;
-  title: string;
-  message: string | ReactNode;
-  severity: 'warning' | 'error';
-  timestamp?: number;
-  category?: string;
-  action?: string;
-};
 
 export type Props<T> = {
   logger: Logger;
@@ -144,16 +128,6 @@ export abstract class FlipperBasePlugin<
   static getActiveNotifications:
     | ((persistedState: StaticPersistedState) => Array<Notification>)
     | undefined;
-  static onRegisterDevice:
-    | ((
-        store: Store,
-        baseDevice: BaseDevice,
-        setPersistedState: (
-          pluginKey: string,
-          newPluginState: StaticPersistedState | null,
-        ) => void,
-      ) => void)
-    | null;
 
   reducers: {
     [actionName: string]: (state: State, actionData: any) => Partial<State>;

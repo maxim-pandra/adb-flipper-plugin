@@ -43,6 +43,8 @@ import * as Immer from 'immer';
 import * as antd from 'antd';
 import * as emotion_styled from '@emotion/styled';
 import * as antdesign_icons from '@ant-design/icons';
+// @ts-ignore
+import * as crc32 from 'crc32';
 
 // eslint-disable-next-line import/no-unresolved
 import getDefaultPluginsIndex from '../utils/getDefaultPluginsIndex';
@@ -64,6 +66,7 @@ export default async (store: Store, logger: Logger) => {
   globalObject.antd = antd;
   globalObject.emotion_styled = emotion_styled;
   globalObject.antdesign_icons = antdesign_icons;
+  globalObject.crc32_hack_fix_me = crc32;
 
   const gatekeepedPlugins: Array<ActivatablePluginDetails> = [];
   const disabledPlugins: Array<ActivatablePluginDetails> = [];
@@ -286,8 +289,16 @@ const requirePluginInternal = (
     if (plugin.default) {
       plugin = plugin.default;
     }
-    if (!(plugin.prototype instanceof FlipperBasePlugin)) {
-      throw new Error(`Plugin ${plugin.name} is not a FlipperBasePlugin`);
+    if (plugin.prototype === undefined) {
+      throw new Error(
+        `Plugin ${pluginDetails.name} is neither a class-based plugin nor a Sandy-based one.
+        Ensure that it exports either a FlipperPlugin class or has flipper-plugin declared as a peer-dependency and exports a plugin and Component.
+        See https://fbflipper.com/docs/extending/sandy-migration/ for more information.`,
+      );
+    } else if (!(plugin.prototype instanceof FlipperBasePlugin)) {
+      throw new Error(
+        `Plugin ${pluginDetails.name} is not a FlipperBasePlugin`,
+      );
     }
 
     if (plugin.id && pluginDetails.id !== plugin.id) {

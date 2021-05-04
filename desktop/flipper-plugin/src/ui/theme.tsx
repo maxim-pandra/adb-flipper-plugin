@@ -8,7 +8,6 @@
  */
 
 // Exposes all the variables defined in themes/base.less:
-
 export const theme = {
   white: 'white', // use as counter color for primary
   black: 'black',
@@ -19,6 +18,7 @@ export const theme = {
   textColorPrimary: 'var(--flipper-text-color-primary)',
   textColorSecondary: 'var(--flipper-text-color-secondary)',
   textColorPlaceholder: 'var(--flipper-text-color-placeholder)',
+  textColorActive: 'var(--light-color-button-active)',
   disabledColor: 'var(--flipper-disabled-color)',
   backgroundDefault: 'var(--flipper-background-default)',
   backgroundWash: 'var(--flipper-background-wash)',
@@ -38,7 +38,12 @@ export const theme = {
     huge: 24,
   } as const,
   fontSize: {
-    smallBody: '12px',
+    default: '14px',
+    small: '12px',
+  } as const,
+  monospace: {
+    fontFamily: 'SF Mono,Monaco,Andale Mono,monospace',
+    fontSize: '12px',
   } as const,
 } as const;
 

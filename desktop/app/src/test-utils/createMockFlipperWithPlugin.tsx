@@ -38,6 +38,7 @@ export type MockFlipperResult = {
   device: BaseDevice;
   store: Store;
   pluginKey: string;
+  sendError(error: any, client?: Client): void;
   sendMessage(method: string, params: any, client?: Client): void;
   createDevice(serial: string): BaseDevice;
   createClient(
@@ -60,6 +61,8 @@ type MockOptions = Partial<{
   dontEnableAdditionalPlugins?: true;
   asBackgroundPlugin?: true;
   supportedPlugins?: string[];
+  device?: BaseDevice;
+  archivedDevice?: boolean;
 }>;
 
 function isPluginEnabled(
@@ -88,7 +91,8 @@ export async function createMockFlipperWithPlugin(
   const logger = mockFlipper.logger;
   const store = mockFlipper.store;
 
-  const createDevice = (serial: string) => mockFlipper.createDevice({serial});
+  const createDevice = (serial: string, archived?: boolean) =>
+    mockFlipper.createDevice({serial, archived});
   const createClient = async (
     device: BaseDevice,
     name: string,
@@ -127,7 +131,9 @@ export async function createMockFlipperWithPlugin(
     return client;
   };
 
-  const device = createDevice('serial');
+  const device = options?.device
+    ? mockFlipper.loadDevice(options?.device)
+    : createDevice('serial', options?.archivedDevice);
   const client = await createClient(device, 'TestApp');
 
   store.dispatch(selectDevice(device));
@@ -146,6 +152,13 @@ export async function createMockFlipperWithPlugin(
     client,
     device: device as any,
     store,
+    sendError(error: any, actualClient = client) {
+      actualClient.onMessage(
+        JSON.stringify({
+          error,
+        }),
+      );
+    },
     sendMessage(method, params, actualClient = client) {
       actualClient.onMessage(
         JSON.stringify({
@@ -164,7 +177,8 @@ export async function createMockFlipperWithPlugin(
     pluginKey: getPluginKey(client.id, device, pluginClazz.id),
     togglePlugin(id?: string) {
       const plugin = id
-        ? store.getState().plugins.clientPlugins.get(id)
+        ? store.getState().plugins.clientPlugins.get(id) ??
+          store.getState().plugins.devicePlugins.get(id)
         : pluginClazz;
       if (!plugin) {
         throw new Error('unknown plugin ' + id);

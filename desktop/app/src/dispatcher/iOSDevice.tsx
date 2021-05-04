@@ -18,7 +18,6 @@ import child_process from 'child_process';
 const execFile = child_process.execFile;
 import iosUtil from '../utils/iOSContainerUtility';
 import IOSDevice from '../devices/IOSDevice';
-import {registerDeviceCallbackOnPlugins} from '../utils/onRegisterDevice';
 import {addErrorNotification} from '../reducers/notifications';
 import {getStaticPath} from '../utils/pathUtils';
 import {destroyDevice} from '../reducers/connections';
@@ -65,12 +64,13 @@ function forwardPort(port: number, multiplexChannelPort: number) {
     portforwardingClient,
     [`-portForward=${port}`, `-multiplexChannelPort=${multiplexChannelPort}`],
     (err, stdout, stderr) => {
-      console.error('Port forwarding app failed to start', err, stdout, stderr);
+      // This happens on app reloads and doesn't need to be treated as an error.
+      console.warn('Port forwarding app failed to start', err, stdout, stderr);
     },
   );
   console.log('Port forwarding app started', childProcess);
   childProcess.addListener('error', (err) =>
-    console.error('Port forwarding app error', err),
+    console.warn('Port forwarding app error', err),
   );
   childProcess.addListener('exit', (code) =>
     console.log(`Port forwarding app exited with code ${code}`),
@@ -176,12 +176,6 @@ function processDevices(
         type: 'REGISTER_DEVICE',
         payload: iOSDevice,
       });
-      registerDeviceCallbackOnPlugins(
-        store,
-        store.getState().plugins.devicePlugins,
-        store.getState().plugins.clientPlugins,
-        iOSDevice,
-      );
     }
   }
 

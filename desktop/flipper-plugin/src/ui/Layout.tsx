@@ -7,7 +7,7 @@
  * @format
  */
 
-import React, {CSSProperties} from 'react';
+import React, {CSSProperties, forwardRef} from 'react';
 import styled from '@emotion/styled';
 import {
   normalizePadding,
@@ -110,44 +110,124 @@ const ScrollChild = styled(Container)<{axis?: ScrollAxis}>(({axis}) => ({
 
 type ScrollAxis = 'x' | 'y' | 'both';
 
-const ScrollContainer = ({
-  children,
-  horizontal,
-  vertical,
-  padv,
-  padh,
-  pad,
-  ...rest
-}: React.HTMLAttributes<HTMLDivElement> & {
-  horizontal?: boolean;
-  vertical?: boolean;
-} & PaddingProps) => {
-  const axis =
-    horizontal && !vertical ? 'x' : !horizontal && vertical ? 'y' : 'both';
-  return (
-    <ScrollParent axis={axis} {...rest}>
-      <ScrollChild axis={axis} padv={padv} padh={padh} pad={pad}>
-        {children}
-      </ScrollChild>
-    </ScrollParent>
-  ) as any;
-};
+const ScrollContainer = forwardRef(
+  (
+    {
+      children,
+      horizontal,
+      vertical,
+      padv,
+      padh,
+      pad,
+      ...rest
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      horizontal?: boolean;
+      vertical?: boolean;
+    } & PaddingProps,
+    ref: React.ForwardedRef<HTMLDivElement>,
+  ) => {
+    const axis =
+      horizontal && !vertical ? 'x' : !horizontal && vertical ? 'y' : 'both';
+    return (
+      <ScrollParent axis={axis} {...rest} ref={ref}>
+        <ScrollChild axis={axis} padv={padv} padh={padh} pad={pad}>
+          {children}
+        </ScrollChild>
+      </ScrollParent>
+    ) as any;
+  },
+);
 
 type SplitLayoutProps = {
   /**
    * If set, items will be centered over the orthogonal direction, if false (the default) items will be stretched.
    */
   center?: boolean;
+  gap?: Spacing;
   children: [React.ReactNode, React.ReactNode];
-  style?: React.HTMLAttributes<HTMLDivElement>['style'];
-};
+  style?: CSSProperties;
+} & SplitHorizontalResizableProps &
+  SplitVerticalResizableProps;
+
+type SplitHorizontalResizableProps =
+  | {
+      resizable: true;
+      /**
+       * Width describes the width of the resizable pane. To set a global width use the style attribute.
+       */
+      width?: number;
+      minWidth?: number;
+      maxWidth?: number;
+    }
+  | {};
+
+type SplitVerticalResizableProps =
+  | {
+      resizable: true;
+      /**
+       * Width describes the width of the resizable pane. To set a global width use the style attribute.
+       */
+      height?: number;
+      minHeight?: number;
+      maxHeight?: number;
+    }
+  | {};
+
+const Empty = styled.div({width: 0, height: 0});
 
 function renderSplitLayout(
   props: SplitLayoutProps,
   direction: 'column' | 'row',
   grow: 1 | 2,
 ) {
-  const [child1, child2] = props.children;
+  let [child1, child2] = props.children;
+  // prevent some children to be accidentally omitted if the primary one is `null`
+  if (!child1) {
+    child1 = <Empty />;
+  }
+  if (!child2) {
+    child2 = <Empty />;
+  }
+  if ('resizable' in props && props.resizable) {
+    const {
+      width,
+      height,
+      minHeight,
+      minWidth,
+      maxHeight,
+      maxWidth,
+    } = props as any;
+    const sizeProps =
+      direction === 'column'
+        ? ({
+            minHeight,
+            height: height ?? 300,
+            maxHeight,
+          } as const)
+        : ({
+            minWidth,
+            width: width ?? 300,
+            maxWidth,
+          } as const);
+    const Sidebar = require('./Sidebar').Sidebar;
+    if (grow === 2) {
+      child1 = (
+        <Sidebar
+          position={direction === 'column' ? 'top' : 'left'}
+          {...sizeProps}>
+          {child1}
+        </Sidebar>
+      );
+    } else {
+      child2 = (
+        <Sidebar
+          position={direction === 'column' ? 'bottom' : 'right'}
+          {...sizeProps}>
+          {child2}
+        </Sidebar>
+      );
+    }
+  }
   return (
     <SandySplitContainer {...props} flexDirection={direction} grow={grow}>
       {child1}
@@ -168,16 +248,16 @@ function renderSplitLayout(
  * Use Layout.Top / Right / Bottom / Left to indicate where the fixed element should live.
  */
 export const Layout = {
-  Top(props: SplitLayoutProps) {
+  Top(props: SplitLayoutProps & SplitVerticalResizableProps) {
     return renderSplitLayout(props, 'column', 2);
   },
-  Bottom(props: SplitLayoutProps) {
+  Bottom(props: SplitLayoutProps & SplitVerticalResizableProps) {
     return renderSplitLayout(props, 'column', 1);
   },
-  Left(props: SplitLayoutProps) {
+  Left(props: SplitLayoutProps & SplitHorizontalResizableProps) {
     return renderSplitLayout(props, 'row', 2);
   },
-  Right(props: SplitLayoutProps) {
+  Right(props: SplitLayoutProps & SplitHorizontalResizableProps) {
     return renderSplitLayout(props, 'row', 1);
   },
   Container,
@@ -191,6 +271,7 @@ Object.keys(Layout).forEach((key) => {
 
 const SandySplitContainer = styled.div<{
   grow: 1 | 2;
+  gap?: Spacing;
   center?: boolean;
   flexDirection: CSSProperties['flexDirection'];
 }>((props) => ({
@@ -199,12 +280,13 @@ const SandySplitContainer = styled.div<{
   flex: 1,
   flexDirection: props.flexDirection,
   alignItems: props.center ? 'center' : 'stretch',
+  gap: normalizeSpace(props.gap, theme.space.small),
   overflow: props.center ? undefined : 'hidden', // only use overflow hidden in container mode, to avoid weird resizing issues
-  '> :nth-child(1)': {
+  '>:nth-child(1)': {
     flex: props.grow === 1 ? splitGrowStyle : splitFixedStyle,
     minWidth: props.grow === 1 ? 0 : undefined,
   },
-  '> :nth-child(2)': {
+  '>:nth-child(2)': {
     flex: props.grow === 2 ? splitGrowStyle : splitFixedStyle,
     minWidth: props.grow === 2 ? 0 : undefined,
   },

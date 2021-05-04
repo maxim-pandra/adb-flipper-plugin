@@ -8,9 +8,8 @@
  */
 
 import React, {useEffect, useState, useCallback} from 'react';
-import {TrackingScope, useLogger} from 'flipper-plugin';
+import {TrackingScope, useLogger, _Sidebar, Layout} from 'flipper-plugin';
 import {Link, styled} from '../ui';
-import {Layout, Sidebar} from '../ui';
 import {theme} from 'flipper-plugin';
 import {ipcRenderer} from 'electron';
 import {Logger} from '../fb-interfaces/Logger';
@@ -30,7 +29,6 @@ import {ContentContainer} from './ContentContainer';
 import {Notification} from './notification/Notification';
 import {SheetRenderer} from '../chrome/SheetRenderer';
 import {hasNewChangesToShow} from '../chrome/ChangelogSheet';
-import {SandyWelcomeScreen} from './SandyWelcomeScreen';
 import {getVersionString} from '../utils/versionString';
 import config from '../fb-stubs/config';
 import {WelcomeScreenStaticView} from './WelcomeScreen';
@@ -138,23 +136,20 @@ export function SandyApp() {
 
   return (
     <Layout.Top>
-      <>
-        <SheetRenderer logger={logger} />
-        <SandyWelcomeScreen />
-      </>
+      <SheetRenderer logger={logger} />
       <Layout.Left>
         <Layout.Horizontal>
           <LeftRail
             toplevelSelection={toplevelSelection}
             setToplevelSelection={setToplevelSelection}
           />
-          <Sidebar width={250} minWidth={220} maxWidth={800} gutter>
+          <_Sidebar width={250} minWidth={220} maxWidth={800} gutter>
             {leftMenuContent && (
               <TrackingScope scope={toplevelSelection!}>
                 {leftMenuContent}
               </TrackingScope>
             )}
-          </Sidebar>
+          </_Sidebar>
         </Layout.Horizontal>
         <MainContainer>
           {outOfContentsContainer}

@@ -28,7 +28,6 @@ export {
   FlipperPlugin,
   FlipperDevicePlugin,
   callClient,
-  Notification,
   BaseAction,
 } from './plugin';
 export {PluginClient, Props} from './plugin';
@@ -42,7 +41,7 @@ export {connect} from 'react-redux';
 export {selectPlugin, StaticView} from './reducers/connections';
 export {writeBufferToFile, bufferToBlob} from './utils/screenshot';
 export {getPluginKey, getPersistedState} from './utils/pluginUtils';
-export {Idler} from 'flipper-plugin';
+export {Idler, Notification} from 'flipper-plugin';
 export {Store, MiddlewareAPI, State as ReduxState} from './reducers/index';
 export {default as BaseDevice} from './devices/BaseDevice';
 export {DeviceLogEntry, LogLevel, DeviceLogListener} from 'flipper-plugin';
@@ -50,7 +49,7 @@ export {shouldParseAndroidLog} from './utils/crashReporterUtility';
 export {deconstructClientId} from './utils/clientUtils';
 export {default as isProduction} from './utils/isProduction';
 export {createTablePlugin} from './createTablePlugin';
-export {default as DetailSidebar} from './chrome/DetailSidebar';
+export {DetailSidebar} from 'flipper-plugin';
 export {default as Device} from './devices/BaseDevice';
 export {default as AndroidDevice} from './devices/AndroidDevice';
 export {default as MetroDevice} from './devices/MetroDevice';
@@ -89,19 +88,16 @@ export {
   ManagedTableProps_immutable,
 } from './ui/components/table/ManagedTable_immutable';
 export {
-  Value,
-  renderValue,
-  valueToNullableString,
-} from './ui/components/table/TypeBasedValueRenderer';
-export {
   DataValueExtractor,
   DataInspectorExpanded,
-} from './ui/components/data-inspector/DataInspector';
-export {default as DataInspector} from './ui/components/data-inspector/DataInspector';
-export {default as ManagedDataInspector} from './ui/components/data-inspector/ManagedDataInspector';
+  DataDescriptionType,
+  DataDescription,
+  DataInspector,
+  MarkerTimeline,
+} from 'flipper-plugin';
+export {DataInspector as ManagedDataInspector} from 'flipper-plugin';
 export {default as SearchableDataInspector} from './ui/components/data-inspector/SearchableDataInspector';
-export {default as DataDescription} from './ui/components/data-inspector/DataDescription';
-export {HighlightManager} from './ui/components/Highlight';
+export {HighlightManager} from 'flipper-plugin';
 export {default as Tabs} from './ui/components/Tabs';
 export {default as Tab} from './ui/components/Tab';
 export {default as Input} from './ui/components/Input';
@@ -113,7 +109,7 @@ export {default as ErrorBlock} from './ui/components/ErrorBlock';
 export {ErrorBlockContainer} from './ui/components/ErrorBlock';
 export {default as ErrorBoundary} from './ui/components/ErrorBoundary';
 export {OrderableOrder} from './ui/components/Orderable';
-export {default as Interactive} from './ui/components/Interactive';
+export {_Interactive as Interactive} from 'flipper-plugin';
 export {default as Orderable} from './ui/components/Orderable';
 export {default as VirtualList} from './ui/components/VirtualList';
 export {Component, PureComponent} from 'react';
@@ -141,7 +137,8 @@ export {default as FlexBox} from './ui/components/FlexBox';
 export {default as FlexRow} from './ui/components/FlexRow';
 export {default as FlexColumn} from './ui/components/FlexColumn';
 export {default as FlexCenter} from './ui/components/FlexCenter';
-export {default as Toolbar, Spacer} from './ui/components/Toolbar';
+export {Toolbar} from 'flipper-plugin';
+export {Spacer} from './ui/components/Toolbar';
 export {default as ToolbarIcon} from './ui/components/ToolbarIcon';
 export {default as Panel} from './ui/components/Panel';
 export {default as Text} from './ui/components/Text';
@@ -158,7 +155,6 @@ export {default as VerticalRule} from './ui/components/VerticalRule';
 export {default as Label} from './ui/components/Label';
 export {default as Heading} from './ui/components/Heading';
 export {Filter} from './ui/components/filter/types';
-export {default as MarkerTimeline} from './ui/components/MarkerTimeline';
 export {default as StackTrace} from './ui/components/StackTrace';
 export {
   SearchBox,
@@ -173,22 +169,18 @@ export {
 } from './ui/components/searchable/SearchableTable';
 export {default as SearchableTable_immutable} from './ui/components/searchable/SearchableTable_immutable';
 export {
-  ElementID,
-  ElementData,
-  ElementFramework,
-  ElementAttribute,
-  Element,
-  ElementSearchResultSet,
+  ElementsInspector,
+  ElementsInspectorElement as Element,
+  // TODO: clean up or create namespace
   ElementsInspectorProps,
-} from './ui/components/elements-inspector/ElementsInspector';
-export {
-  Elements,
-  ElementsConstants,
-} from './ui/components/elements-inspector/elements';
-export {ContextMenuExtension} from './ui/components/elements-inspector/elements';
-export {default as ElementsInspector} from './ui/components/elements-inspector/ElementsInspector';
+  ElementExtraInfo,
+  ElementAttribute,
+  ElementData,
+  ElementSearchResultSet,
+  ElementID,
+} from 'flipper-plugin';
+export {ElementFramework} from './ui/components/elements-inspector/ElementFramework';
 export {InspectorSidebar} from './ui/components/elements-inspector/sidebar';
-export {Console} from './ui/components/console';
 export {default as Sheet} from './ui/components/Sheet';
 export {default as FileSelector} from './ui/components/FileSelector';
 export {KeyboardActions} from './MenuBar';
@@ -197,10 +189,8 @@ export {Rect} from './utils/geometry';
 export {Logger} from './fb-interfaces/Logger';
 export {getInstance as getLogger} from './fb-stubs/Logger';
 export {callVSCode, getVSCodeUrl} from './utils/vscodeUtils';
-export {useLocalStorage} from './utils/useLocalStorage';
+export {useLocalStorageState as useLocalStorage} from 'flipper-plugin';
 export {checkIdbIsInstalled} from './utils/iOSContainerUtility';
-// Sidebar extensions should be last so they can import anything from here.
-export {default as SidebarExtensions} from './fb-stubs/LayoutInspectorSidebarExtensions';
 export {IDEFileResolver, IDEType} from './fb-stubs/IDEFileResolver';
 export {renderMockFlipperWithPlugin} from './test-utils/createMockFlipperWithPlugin';
 export {Tracked} from 'flipper-plugin'; // To be able to use it in legacy plugins

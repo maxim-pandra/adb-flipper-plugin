@@ -7,23 +7,28 @@
  * @format
  */
 
-import {SandyPluginDefinition} from './SandyPluginDefinition';
+import {message} from 'antd';
 import {EventEmitter} from 'events';
-import {Atom} from '../state/atom';
+import {SandyPluginDefinition} from './SandyPluginDefinition';
 import {MenuEntry, NormalizedMenuEntry, normalizeMenuEntry} from './MenuEntry';
 import {FlipperLib} from './FlipperLib';
 import {Device, RealFlipperDevice} from './DevicePlugin';
 import {batched} from '../state/batch';
 import {Idler} from '../utils/Idler';
-import {message} from 'antd';
+import {Notification} from './Notification';
+import {Logger} from '../utils/Logger';
 
 type StateExportHandler<T = any> = (
   idler: Idler,
   onStatusMessage: (msg: string) => void,
-) => Promise<T>;
+) => Promise<T | undefined | void>;
 type StateImportHandler<T = any> = (data: T) => void;
 
 export interface BasePluginClient {
+  /**
+   * A key that uniquely identifies this plugin instance, captures the current device/client/plugin combination.
+   */
+  readonly pluginKey: string;
   readonly device: Device;
 
   /**
@@ -49,8 +54,11 @@ export interface BasePluginClient {
   /**
    * Triggered when the current plugin is being exported and should create a snapshot of the state exported.
    * Overrides the default export behavior and ignores any 'persist' flags of state.
+   *
+   * If an object is returned from the handler, that will be taken as export.
+   * Otherwise, if nothing is returned, the handler will be run, and after the handler has finished the `persist` keys of the different states will be used as export basis.
    */
-  onExport<T = any>(exporter: StateExportHandler<T>): void;
+  onExport<T extends object>(exporter: StateExportHandler<T>): void;
 
   /**
    * Triggered directly after the plugin instance was created, if the plugin is being restored from a snapshot.
@@ -70,10 +78,34 @@ export interface BasePluginClient {
   createPaste(input: string): Promise<string | undefined>;
 
   /**
+   * Returns true if this is an internal Facebook build.
+   * Always returns `false` in open source
+   */
+  readonly isFB: boolean;
+
+  /**
    * Returns true if the user is taking part in the given gatekeeper.
    * Always returns `false` in open source.
    */
   GK(gkName: string): boolean;
+
+  /**
+   * Shows an urgent, system wide notification, that will also be registered in Flipper's notification pane.
+   * For on-screen notifications, we recommend to use either the `message` or `notification` API from `antd` directly.
+   *
+   * Clicking the notification will open this plugin. If the `action` id is set, it will be used as deeplink.
+   */
+  showNotification(notification: Notification): void;
+
+  /**
+   * Writes text to the clipboard of the Operating System
+   */
+  writeTextToClipboard(text: string): void;
+
+  /**
+   * Logger instance that logs information to the console, but also to the internal logging (in FB only builds) and which can be used to track performance.
+   */
+  logger: Logger;
 }
 
 let currentPluginInstance: BasePluginInstance | undefined = undefined;
@@ -88,6 +120,26 @@ export function getCurrentPluginInstance(): typeof currentPluginInstance {
   return currentPluginInstance;
 }
 
+export interface Persistable {
+  serialize(): any;
+  deserialize(value: any): void;
+}
+
+export function registerStorageAtom(
+  key: string | undefined,
+  persistable: Persistable,
+) {
+  if (key && getCurrentPluginInstance()) {
+    const {rootStates} = getCurrentPluginInstance()!;
+    if (rootStates[key]) {
+      throw new Error(
+        `Some other state is already persisting with key "${key}"`,
+      );
+    }
+    rootStates[key] = persistable;
+  }
+}
+
 export abstract class BasePluginInstance {
   /** generally available Flipper APIs */
   readonly flipperLib: FlipperLib;
@@ -98,6 +150,9 @@ export abstract class BasePluginInstance {
   /** the device owning this plugin */
   readonly device: Device;
 
+  /** the unique plugin key for this plugin instance, which is unique for this device/app?/pluginId combo */
+  readonly pluginKey: string;
+
   activated = false;
   destroyed = false;
   readonly events = new EventEmitter();
@@ -106,7 +161,7 @@ export abstract class BasePluginInstance {
   initialStates?: Record<string, any>;
 
   // all the atoms that should be serialized when making an export / import
-  readonly rootStates: Record<string, Atom<any>> = {};
+  readonly rootStates: Record<string, Persistable> = {};
   // last seen deeplink
   lastDeeplink?: any;
   // export handler
@@ -121,11 +176,13 @@ export abstract class BasePluginInstance {
     flipperLib: FlipperLib,
     definition: SandyPluginDefinition,
     realDevice: RealFlipperDevice,
+    pluginKey: string,
     initialStates?: Record<string, any>,
   ) {
     this.flipperLib = flipperLib;
     this.definition = definition;
     this.initialStates = initialStates;
+    this.pluginKey = pluginKey;
     if (!realDevice) {
       throw new Error('Illegal State: Device has not yet been loaded');
     }
@@ -133,6 +190,7 @@ export abstract class BasePluginInstance {
       realDevice, // TODO: temporarily, clean up T70688226
       // N.B. we model OS as string, not as enum, to make custom device types possible in the future
       os: realDevice.os,
+      serial: realDevice.serial,
       get isArchived() {
         return realDevice.isArchived;
       },
@@ -172,13 +230,15 @@ export abstract class BasePluginInstance {
             batched(this.importHandler)(this.initialStates);
           } catch (e) {
             const msg = `Error occurred when importing date for plugin '${this.definition.id}': '${e}`;
+            // msg is already specific
+            // eslint-disable-next-line
             console.error(msg, e);
             message.error(msg);
           }
         } else {
           for (const key in this.rootStates) {
             if (key in this.initialStates) {
-              this.rootStates[key].set(this.initialStates[key]);
+              this.rootStates[key].deserialize(this.initialStates[key]);
             } else {
               console.warn(
                 `Tried to initialize plugin with existing data, however data for "${key}" is missing. Was the export created with a different Flipper version?`,
@@ -194,6 +254,7 @@ export abstract class BasePluginInstance {
 
   protected createBasePluginClient(): BasePluginClient {
     return {
+      pluginKey: this.pluginKey,
       device: this.device,
       onActivate: (cb) => {
         this.events.on('activate', batched(cb));
@@ -222,20 +283,30 @@ export abstract class BasePluginInstance {
       addMenuEntry: (...entries) => {
         for (const entry of entries) {
           const normalized = normalizeMenuEntry(entry);
-          if (
-            this.menuEntries.find(
-              (existing) =>
-                existing.label === normalized.label ||
-                existing.action === normalized.action,
-            )
-          ) {
-            throw new Error(`Duplicate menu entry: '${normalized.label}'`);
+          const idx = this.menuEntries.findIndex(
+            (existing) =>
+              existing.label === normalized.label ||
+              existing.action === normalized.action,
+          );
+          if (idx !== -1) {
+            this.menuEntries[idx] = normalizeMenuEntry(entry);
+          } else {
+            this.menuEntries.push(normalizeMenuEntry(entry));
           }
-          this.menuEntries.push(normalizeMenuEntry(entry));
+          if (this.activated) {
+            // entries added after initial registration
+            this.flipperLib.enableMenuEntries(this.menuEntries);
+          }
         }
       },
+      writeTextToClipboard: this.flipperLib.writeTextToClipboard,
       createPaste: this.flipperLib.createPaste,
+      isFB: this.flipperLib.isFB,
       GK: this.flipperLib.GK,
+      showNotification: (notification: Notification) => {
+        this.flipperLib.showNotification(this.pluginKey, notification);
+      },
+      logger: this.flipperLib.logger,
     };
   }
 
@@ -243,8 +314,8 @@ export abstract class BasePluginInstance {
   activate() {
     this.assertNotDestroyed();
     if (!this.activated) {
-      this.activated = true;
       this.flipperLib.enableMenuEntries(this.menuEntries);
+      this.activated = true;
       this.events.emit('activate');
       this.flipperLib.logger.trackTimeSince(
         `activePlugin-${this.definition.id}`,
@@ -277,7 +348,14 @@ export abstract class BasePluginInstance {
     this.assertNotDestroyed();
     if (deepLink !== this.lastDeeplink) {
       this.lastDeeplink = deepLink;
-      this.events.emit('deeplink', deepLink);
+      if (typeof setImmediate !== 'undefined') {
+        // we only want to trigger deeplinks after the plugin had a chance to render
+        setImmediate(() => {
+          this.events.emit('deeplink', deepLink);
+        });
+      } else {
+        this.events.emit('deeplink', deepLink);
+      }
     }
   }
 
@@ -288,8 +366,15 @@ export abstract class BasePluginInstance {
         'Cannot export sync a plugin that does have an export handler',
       );
     }
+    return this.serializeRootStates();
+  }
+
+  private serializeRootStates() {
     return Object.fromEntries(
-      Object.entries(this.rootStates).map(([key, atom]) => [key, atom.get()]),
+      Object.entries(this.rootStates).map(([key, atom]) => [
+        key,
+        atom.serialize(),
+      ]),
     );
   }
 
@@ -298,9 +383,13 @@ export abstract class BasePluginInstance {
     onStatusMessage: (msg: string) => void,
   ): Promise<Record<string, any>> {
     if (this.exportHandler) {
-      return await this.exportHandler(idler, onStatusMessage);
+      const result = await this.exportHandler(idler, onStatusMessage);
+      if (result !== undefined) {
+        return result;
+      }
+      // intentional fall-through, the export handler merely updated the state, but prefers the default export format
     }
-    return this.exportStateSync();
+    return this.serializeRootStates();
   }
 
   isPersistable(): boolean {

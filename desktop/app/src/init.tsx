@@ -162,7 +162,7 @@ function setProcessState(store: Store) {
   const androidHome = settings.androidHome;
   const idbPath = settings.idbPath;
 
-  if (!process.env.ANDROID_HOME) {
+  if (!process.env.ANDROID_HOME && !process.env.ANDROID_SDK_ROOT) {
     process.env.ANDROID_HOME = androidHome;
   }
 
@@ -228,8 +228,6 @@ const persistor = persistStore(store, undefined, () => {
 setPersistor(persistor);
 
 const CodeBlock = styled(Input.TextArea)({
-  fontFamily:
-    'SFMono-Regular,Consolas,Liberation Mono,Menlo,Courier,monospace;',
-  fontSize: '0.8em',
+  ...theme.monospace,
   color: theme.textColorSecondary,
 });

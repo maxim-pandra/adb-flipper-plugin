@@ -9,14 +9,14 @@
 
 import {Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
-import {registerDeviceCallbackOnPlugins} from '../utils/onRegisterDevice';
 import MetroDevice from '../devices/MetroDevice';
 import http from 'http';
 import {addErrorNotification} from '../reducers/notifications';
 import {destroyDevice} from '../reducers/connections';
+import {parseEnvironmentVariableAsNumber} from '../utils/environmentVariables';
 
-const METRO_PORT = 8081;
 const METRO_HOST = 'localhost';
+const METRO_PORT = parseEnvironmentVariableAsNumber('METRO_SERVER_PORT', 8081);
 const METRO_URL = `http://${METRO_HOST}:${METRO_PORT}`;
 const METRO_LOGS_ENDPOINT = `ws://${METRO_HOST}:${METRO_PORT}/events`;
 const METRO_MESSAGE = ['React Native packager is running', 'Metro is running'];
@@ -67,13 +67,6 @@ export async function registerMetroDevice(
     payload: metroDevice,
     serial: METRO_URL,
   });
-
-  registerDeviceCallbackOnPlugins(
-    store,
-    store.getState().plugins.devicePlugins,
-    store.getState().plugins.clientPlugins,
-    metroDevice,
-  );
 }
 
 export default (store: Store, logger: Logger) => {

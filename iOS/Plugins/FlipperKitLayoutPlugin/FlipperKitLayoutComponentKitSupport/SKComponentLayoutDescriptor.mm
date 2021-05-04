@@ -19,12 +19,12 @@
 #import <ComponentKit/CKComponentInternal.h>
 #import <ComponentKit/CKComponentLayout.h>
 #import <ComponentKit/CKComponentRootView.h>
-#import <ComponentKit/CKComponentViewConfiguration.h>
 #import <ComponentKit/CKFlexboxComponent.h>
 #import <ComponentKit/CKInsetComponent.h>
+#import <ComponentKit/CKViewConfiguration.h>
 
 #import <FlipperKitHighlightOverlay/SKHighlightOverlay.h>
-#import <FlipperKitLayoutPlugin/SKObject.h>
+#import <FlipperKitLayoutHelpers/SKObject.h>
 #import <FlipperKitLayoutTextSearchable/FKTextSearchable.h>
 
 #import "CKComponent+Sonar.h"

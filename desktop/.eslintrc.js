@@ -76,6 +76,14 @@ module.exports = {
         property: 'remote',
       },
     ],
+    'no-restricted-imports': [
+      1,
+      {
+        name: 'flipper',
+        message:
+          "Direct imports from 'flipper' are deprecated. Import from 'flipper-plugin' instead, which can be tested and distributed stand-alone. See https://fbflipper.com/docs/extending/sandy-migration for more details.",
+      },
+    ],
 
     // additional rules for this project
     'header/header': [2, 'block', {pattern}],
@@ -85,6 +93,7 @@ module.exports = {
     'node/no-extraneous-require': [2, {allowModules: builtInModules}],
     'flipper/no-relative-imports-across-packages': [2],
     'flipper/no-electron-remote-imports': [1],
+    'flipper/no-console-error-without-context': [1],
   },
   settings: {
     'import/resolver': {
@@ -109,6 +118,7 @@ module.exports = {
         // for reference: https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/README.md#extension-rules
         'no-unused-vars': 0,
         'no-redeclare': 0,
+        'no-dupe-class-members': 0,
         '@typescript-eslint/no-redeclare': 1,
         '@typescript-eslint/no-unused-vars': [
           1,

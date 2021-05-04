@@ -72,7 +72,6 @@ const argv = yargs
       description:
         'Unique build identifier to be used as the version patch part for the build',
       type: 'number',
-      default: 0,
     },
     channel: {
       description: 'Release channel for the build',
@@ -161,7 +160,7 @@ async function afterPack(context: AfterPackContext) {
   // and property names being present.
   type Mutable<T> = {-readonly [P in keyof T]: T[P]};
   const originalPackager = Object.assign({}, context.packager);
-  const packager = context.packager as WinPackager;
+  const packager = (context.packager as unknown) as WinPackager;
   const appInfo: Mutable<AppInfo> = packager.appInfo;
   const exeFileName = `${packager.appInfo.productFilename}.exe`;
   appInfo.version = FIX_RELEASE_VERSION;

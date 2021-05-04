@@ -11,7 +11,7 @@ import {SandyPluginDefinition} from './SandyPluginDefinition';
 import {BasePluginInstance, BasePluginClient} from './PluginBase';
 import {FlipperLib} from './FlipperLib';
 import {DeviceType as PluginDeviceType} from 'flipper-plugin-lib';
-import {Atom} from '../state/atom';
+import {Atom, ReadOnlyAtom} from '../state/atom';
 
 export type DeviceLogListener = (entry: DeviceLogEntry) => void;
 
@@ -39,6 +39,7 @@ export interface Device {
   readonly isArchived: boolean;
   readonly isConnected: boolean;
   readonly os: string;
+  readonly serial: string;
   readonly deviceType: DeviceType;
   onLogEntry(cb: DeviceLogListener): () => void;
 }
@@ -59,6 +60,9 @@ export interface DevicePluginClient extends BasePluginClient {
    * opens a different plugin by id, optionally providing a deeplink to bring the plugin to a certain state
    */
   selectPlugin(pluginId: string, deeplinkPayload?: unknown): void;
+
+  readonly isConnected: boolean;
+  readonly connected: ReadOnlyAtom<boolean>;
 }
 
 /**
@@ -88,9 +92,10 @@ export class SandyDevicePluginInstance extends BasePluginInstance {
     flipperLib: FlipperLib,
     definition: SandyPluginDefinition,
     realDevice: RealFlipperDevice,
+    pluginKey: string,
     initialStates?: Record<string, any>,
   ) {
-    super(flipperLib, definition, realDevice, initialStates);
+    super(flipperLib, definition, realDevice, pluginKey, initialStates);
     this.client = {
       ...this.createBasePluginClient(),
       isPluginAvailable(pluginId: string) {
@@ -101,6 +106,10 @@ export class SandyDevicePluginInstance extends BasePluginInstance {
           flipperLib.selectPlugin(realDevice, null, pluginId, deeplink);
         }
       },
+      get isConnected() {
+        return realDevice.connected.get();
+      },
+      connected: realDevice.connected,
     };
     this.initializePlugin(() =>
       definition.asDevicePluginModule().devicePlugin(this.client),

@@ -12,7 +12,7 @@ import {BasePluginInstance, BasePluginClient} from './PluginBase';
 import {FlipperLib} from './FlipperLib';
 import {RealFlipperDevice} from './DevicePlugin';
 import {batched} from '../state/batch';
-import {Atom, createState} from '../state/atom';
+import {Atom, createState, ReadOnlyAtom} from '../state/atom';
 
 type EventsContract = Record<string, any>;
 type MethodsContract = Record<string, (params: any) => Promise<any>>;
@@ -40,6 +40,7 @@ export interface PluginClient<
   readonly appName: string;
 
   readonly isConnected: boolean;
+  readonly connected: ReadOnlyAtom<boolean>;
 
   /**
    * the onConnect event is fired whenever the plugin is connected to it's counter part on the device.
@@ -148,9 +149,16 @@ export class SandyPluginInstance extends BasePluginInstance {
     flipperLib: FlipperLib,
     definition: SandyPluginDefinition,
     realClient: RealFlipperClient,
+    pluginKey: string,
     initialStates?: Record<string, any>,
   ) {
-    super(flipperLib, definition, realClient.deviceSync, initialStates);
+    super(
+      flipperLib,
+      definition,
+      realClient.deviceSync,
+      pluginKey,
+      initialStates,
+    );
     this.realClient = realClient;
     this.definition = definition;
     const self = this;
@@ -162,6 +170,7 @@ export class SandyPluginInstance extends BasePluginInstance {
       get appName() {
         return realClient.query.app;
       },
+      connected: self.connected,
       get isConnected() {
         return self.connected.get();
       },

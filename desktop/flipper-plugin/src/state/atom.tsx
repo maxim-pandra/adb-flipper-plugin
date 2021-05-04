@@ -9,19 +9,25 @@
 
 import {produce, Draft, enableMapSet} from 'immer';
 import {useState, useEffect} from 'react';
-import {getCurrentPluginInstance} from '../plugin/PluginBase';
+import {Persistable, registerStorageAtom} from '../plugin/PluginBase';
 
 enableMapSet();
 
-export type Atom<T> = {
+export interface ReadOnlyAtom<T> {
   get(): T;
+  subscribe(listener: (value: T, prevValue: T) => void): () => void;
+  unsubscribe(listener: (value: T, prevValue: T) => void): void;
+}
+
+export interface Atom<T> extends ReadOnlyAtom<T> {
   set(newValue: T): void;
   update(recipe: (draft: Draft<T>) => void): void;
-};
+  update<X extends T>(recipe: (draft: X) => void): void;
+}
 
-class AtomValue<T> implements Atom<T> {
+class AtomValue<T> implements Atom<T>, Persistable {
   value: T;
-  listeners: ((value: T) => void)[] = [];
+  listeners: ((value: T, prevValue: T) => void)[] = [];
 
   constructor(initialValue: T) {
     this.value = initialValue;
@@ -33,25 +39,35 @@ class AtomValue<T> implements Atom<T> {
 
   set(nextValue: T) {
     if (nextValue !== this.value) {
+      const prevValue = this.value;
       this.value = nextValue;
-      this.notifyChanged();
+      this.notifyChanged(prevValue);
     }
+  }
+
+  deserialize(value: T) {
+    this.set(value);
+  }
+
+  serialize() {
+    return this.get();
   }
 
   update(recipe: (draft: Draft<T>) => void) {
     this.set(produce(this.value, recipe));
   }
 
-  notifyChanged() {
+  notifyChanged(prevValue: T) {
     // TODO: add scheduling
-    this.listeners.slice().forEach((l) => l(this.value));
+    this.listeners.slice().forEach((l) => l(this.value, prevValue));
   }
 
-  subscribe(listener: (value: T) => void) {
+  subscribe(listener: (value: T, prevValue: T) => void) {
     this.listeners.push(listener);
+    return () => this.unsubscribe(listener);
   }
 
-  unsubscribe(listener: (value: T) => void) {
+  unsubscribe(listener: (value: T, prevValue: T) => void) {
     const idx = this.listeners.indexOf(listener);
     if (idx !== -1) {
       this.listeners.splice(idx, 1);
@@ -69,24 +85,27 @@ type StateOptions = {
 
 export function createState<T>(
   initialValue: T,
+  options?: StateOptions,
+): Atom<T>;
+export function createState<T>(): Atom<T | undefined>;
+export function createState(
+  initialValue: any = undefined,
   options: StateOptions = {},
-): Atom<T> {
-  const atom = new AtomValue<T>(initialValue);
-  if (getCurrentPluginInstance() && options.persist) {
-    const {rootStates} = getCurrentPluginInstance()!;
-    if (rootStates[options.persist]) {
-      throw new Error(
-        `Some other state is already persisting with key "${options.persist}"`,
-      );
-    }
-    rootStates[options.persist] = atom;
-  }
+): Atom<any> {
+  const atom = new AtomValue(initialValue);
+  registerStorageAtom(options.persist, atom);
   return atom;
 }
 
-export function useValue<T>(atom: Atom<T>): T;
-export function useValue<T>(atom: Atom<T> | undefined, defaultValue: T): T;
-export function useValue<T>(atom: Atom<T> | undefined, defaultValue?: T): T {
+export function useValue<T>(atom: ReadOnlyAtom<T>): T;
+export function useValue<T>(
+  atom: ReadOnlyAtom<T> | undefined,
+  defaultValue: T,
+): T;
+export function useValue<T>(
+  atom: ReadOnlyAtom<T> | undefined,
+  defaultValue?: T,
+): T {
   const [localValue, setLocalValue] = useState<T>(
     atom ? atom.get() : defaultValue!,
   );

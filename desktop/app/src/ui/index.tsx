@@ -40,17 +40,9 @@ export {ManagedTableProps} from './components/table/ManagedTable';
 export {default as ManagedTable_immutable} from './components/table/ManagedTable_immutable';
 export {ManagedTableProps_immutable} from './components/table/ManagedTable_immutable';
 
-export {Value} from './components/table/TypeBasedValueRenderer';
-export {renderValue} from './components/table/TypeBasedValueRenderer';
-
-export {
-  DataValueExtractor,
-  DataInspectorExpanded,
-} from './components/data-inspector/DataInspector';
-export {default as DataInspector} from './components/data-inspector/DataInspector';
-export {default as ManagedDataInspector} from './components/data-inspector/ManagedDataInspector';
+export {DataValueExtractor, DataInspectorExpanded} from 'flipper-plugin';
+export {DataInspector as ManagedDataInspector} from 'flipper-plugin';
 export {default as SearchableDataInspector} from './components/data-inspector/SearchableDataInspector';
-export {default as DataDescription} from './components/data-inspector/DataDescription';
 
 // tabs
 export {default as Tabs} from './components/Tabs';
@@ -75,7 +67,6 @@ export {default as ErrorBoundary} from './components/ErrorBoundary';
 
 // interactive components
 export {OrderableOrder} from './components/Orderable';
-export {default as Interactive} from './components/Interactive';
 export {default as Orderable} from './components/Orderable';
 export {default as VirtualList} from './components/VirtualList';
 
@@ -110,7 +101,7 @@ export {default as FlexBox} from './components/FlexBox';
 export {default as FlexRow} from './components/FlexRow';
 export {default as FlexColumn} from './components/FlexColumn';
 export {default as FlexCenter} from './components/FlexCenter';
-export {default as Toolbar, Spacer} from './components/Toolbar';
+export {Spacer} from './components/Toolbar';
 export {default as ToolbarIcon} from './components/ToolbarIcon';
 export {default as Panel} from './components/Panel';
 export {default as Text} from './components/Text';
@@ -132,8 +123,6 @@ export {default as Heading} from './components/Heading';
 // filters
 export {Filter} from './components/filter/types';
 
-export {default as MarkerTimeline} from './components/MarkerTimeline';
-
 export {default as StackTrace} from './components/StackTrace';
 
 export {
@@ -149,21 +138,8 @@ export {
 export {default as SearchableTable_immutable} from './components/searchable/SearchableTable_immutable';
 export {SearchableProps} from './components/searchable/Searchable';
 
-export {
-  ElementID,
-  ElementData,
-  ElementAttribute,
-  Element,
-  ElementSearchResultSet,
-  ElementsInspectorProps,
-} from './components/elements-inspector/ElementsInspector';
-export {Elements} from './components/elements-inspector/elements';
-export {ContextMenuExtension} from './components/elements-inspector/elements';
-export {default as ElementsInspector} from './components/elements-inspector/ElementsInspector';
 export {InspectorSidebar} from './components/elements-inspector/sidebar';
 export {VisualizerPortal} from './components/elements-inspector/Visualizer';
-
-export {Console} from './components/console';
 
 export {default as Sheet} from './components/Sheet';
 export {StarButton} from './components/StarButton';
@@ -181,4 +157,3 @@ export {default as AlternatingRows} from './components/AlternatingRows';
 export {Layout} from 'flipper-plugin';
 
 export {default as Scrollable} from './components/Scrollable';
-export * from './components/Highlight';

@@ -21,8 +21,8 @@ import {
 import {State} from '../../reducers';
 
 // eslint-disable-next-line flipper/no-relative-imports-across-packages
-import type {NavigationPlugin} from '../../../../plugins/navigation/index';
-import {useMemoize} from '../../utils/useMemoize';
+import type {NavigationPlugin} from '../../../../plugins/public/navigation/index';
+import {useMemoize} from 'flipper-plugin';
 import styled from '@emotion/styled';
 
 const {Text} = Typography;

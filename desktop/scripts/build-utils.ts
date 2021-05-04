@@ -54,7 +54,7 @@ const hardcodedPlugins = new Set<string>([
 ]);
 
 export function die(err: Error) {
-  console.error(err.stack);
+  console.error(err);
   process.exit(1);
 }
 
@@ -109,6 +109,8 @@ const minifierConfig = {
     keep_fnames: true,
     module: true,
     warnings: true,
+    mangle: false,
+    compress: false,
   },
 };
 
@@ -222,10 +224,12 @@ export function buildFolder(): Promise<string> {
     return '';
   });
 }
-export function getVersionNumber(buildNumber: number) {
+export function getVersionNumber(buildNumber?: number) {
   let {version} = require('../package.json');
-  // Unique build number is passed as --version parameter from Sandcastle
-  version = [...version.split('.').slice(0, 2), buildNumber].join('.');
+  if (buildNumber) {
+    // Unique build number is passed as --version parameter from Sandcastle
+    version = [...version.split('.').slice(0, 2), buildNumber].join('.');
+  }
   return version;
 }
 

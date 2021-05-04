@@ -1,3 +1,47 @@
+# 0.87.0 (28/4/2021)
+
+ * [D27910514](https://github.com/facebook/flipper/search?q=D27910514&type=Commits) -  Severed RSocket connections are no longer treated as an error in plugin code
+
+
+# 0.86.0 (21/4/2021)
+
+ * [D27685983](https://github.com/facebook/flipper/search?q=D27685983&type=Commits) -  [Layout] Addressed several performance issues in the layout plugin
+ * [D27708650](https://github.com/facebook/flipper/search?q=D27708650&type=Commits) -  [Layout] Make the layer selection more prominent
+ * [D27813660](https://github.com/facebook/flipper/search?q=D27813660&type=Commits)
+ * [D27896693](https://github.com/facebook/flipper/search?q=D27896693&type=Commits) -  [Internal]
+
+
+# 0.85.0 (14/4/2021)
+
+ * [D27732746](https://github.com/facebook/flipper/search?q=D27732746&type=Commits) -  Electron downgraded to v11.2.3 to work-around performance issues on MacOS Big Sur
+
+
+# 0.83.0 (31/3/2021)
+
+ * [D27395517](https://github.com/facebook/flipper/search?q=D27395517&type=Commits) -  Logs plugin will now automatically truncate long lines
+ * [D27397506](https://github.com/facebook/flipper/search?q=D27397506&type=Commits) -  Added an explicit autoscroll indicator in logs and fixed snapping
+
+
+# 0.82.2 (30/3/2021)
+
+ * [D27346262](https://github.com/facebook/flipper/search?q=D27346262&type=Commits) -  Logs plugin now supports physical iOS devices
+
+
+# 0.82.0 (25/3/2021)
+
+ * [D27188241](https://github.com/facebook/flipper/search?q=D27188241&type=Commits) -  Restored the possibility to use Regex in logs search
+ * [D27233899](https://github.com/facebook/flipper/search?q=D27233899&type=Commits) -  Layout.Top / Left / Bottom / Right now support a resizable option
+ * [D27302961](https://github.com/facebook/flipper/search?q=D27302961&type=Commits) -  Fixed an issue where Flipper would crash when decoding large partial requests.
+
+
+# 0.81.0 (17/3/2021)
+
+ * [D26947007](https://github.com/facebook/flipper/search?q=D26947007&type=Commits) -  The new logs plugin will linkify urls and pretty print json-like messages
+ * [D27044507](https://github.com/facebook/flipper/search?q=D27044507&type=Commits) -  Crash reporter will now report errors triggered from the device / client plugins by default. This can be disabled in settings.
+ * [D27047041](https://github.com/facebook/flipper/search?q=D27047041&type=Commits) -  Flipper will now use less CPU if logs & crash reporter plugins are disabled by no longer tailing adb logcat.
+ * [D27048528](https://github.com/facebook/flipper/search?q=D27048528&type=Commits) -  The device logs plugin has been fully rewritten. It is faster and more reponsive, formats urls and json, and supports line wrapping and text selection. Beyond that it is now possible to sort and filter on all columns and pause and resume the log stream.
+
+
 # 0.79.0 (3/3/2021)
 
  * [D26749214](https://github.com/facebook/flipper/search?q=D26749214&type=Commits) -  Fix a crash when disconnecting metro devices

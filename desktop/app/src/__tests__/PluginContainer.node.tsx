@@ -24,6 +24,7 @@ import {
 import {selectPlugin} from '../reducers/connections';
 import {updateSettings} from '../reducers/settings';
 import {switchPlugin} from '../reducers/pluginManager';
+import {sleep} from 'flipper-plugin/src/utils/sleep';
 
 interface PersistedState {
   count: 1;
@@ -79,7 +80,7 @@ test('Plugin container can render plugin and receive updates', async () => {
           </h1>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -171,7 +172,7 @@ test('PluginContainer can render Sandy plugins', async () => {
           </div>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -202,7 +203,7 @@ test('PluginContainer can render Sandy plugins', async () => {
           </div>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -270,7 +271,7 @@ test('PluginContainer can render Sandy plugins', async () => {
           </div>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -511,7 +512,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
           </h1>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -528,6 +529,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
     );
   });
 
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!']);
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
@@ -541,7 +543,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
           </h1>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -558,6 +560,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!']);
 
   // ...nor does a random other store update that does trigger a plugin container render
@@ -580,6 +583,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!', 'london!']);
 
   // and same link does trigger if something else was selected in the mean time
@@ -601,6 +605,7 @@ test('PluginContainer + Sandy plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual(['universe!', 'london!', 'london!']);
 });
 
@@ -660,7 +665,7 @@ test('PluginContainer can render Sandy device plugins', async () => {
           </div>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -692,7 +697,7 @@ test('PluginContainer can render Sandy device plugins', async () => {
           </div>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -785,7 +790,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
           </h1>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -802,6 +807,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
     );
   });
 
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse]);
   expect(renderer.baseElement).toMatchInlineSnapshot(`
     <body>
@@ -815,7 +821,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
           </h1>
         </div>
         <div
-          class="css-o0040c-View-FlexBox-FlexRow"
+          class="css-724x97-View-FlexBox-FlexRow"
           id="detailsSidebar"
         />
       </div>
@@ -832,6 +838,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse]);
 
   // ...nor does a random other store update that does trigger a plugin container render
@@ -854,6 +861,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse, 'london!']);
 
   // and same link does trigger if something else was selected in the mean time
@@ -875,6 +883,7 @@ test('PluginContainer + Sandy device plugin supports deeplink', async () => {
       }),
     );
   });
+  await sleep(10);
   expect(linksSeen).toEqual([theUniverse, 'london!', 'london!']);
 });
 
@@ -977,6 +986,7 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
   pluginInstance.selectPlugin(definition.id, 'data');
   expect(store.getState().connections.selectedPlugin).toBe(definition.id);
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
+  await sleep(10);
   expect(renderer.baseElement.querySelector('h1')).toMatchInlineSnapshot(`
     <h1>
       Plugin1
@@ -1004,4 +1014,263 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
     </h1>
   `);
   expect(renders).toBe(2);
+});
+
+test('PluginContainer can render Sandy plugins for archived devices', async () => {
+  let renders = 0;
+
+  function MySandyPlugin() {
+    renders++;
+    const sandyApi = usePlugin(plugin);
+    const count = useValue(sandyApi.count);
+    expect(Object.keys(sandyApi)).toEqual([
+      'connectedStub',
+      'disconnectedStub',
+      'activatedStub',
+      'deactivatedStub',
+      'count',
+    ]);
+    expect(() => {
+      // eslint-disable-next-line
+      usePlugin(function bla() {
+        return {};
+      });
+    }).toThrowError(/didn't match the type of the requested plugin/);
+    return <div>Hello from Sandy{count}</div>;
+  }
+
+  type Events = {
+    inc: {delta: number};
+  };
+
+  const plugin = (client: PluginClient<Events>) => {
+    expect(client.connected.get()).toBeFalsy();
+    expect(client.isConnected).toBeFalsy();
+    expect(client.device.isConnected).toBeFalsy();
+    expect(client.device.isArchived).toBeTruthy();
+    const count = createState(0);
+    const connectedStub = jest.fn();
+    const disconnectedStub = jest.fn();
+    const activatedStub = jest.fn();
+    const deactivatedStub = jest.fn();
+    client.onConnect(connectedStub);
+    client.onDisconnect(disconnectedStub);
+    client.onActivate(activatedStub);
+    client.onDeactivate(deactivatedStub);
+    client.onMessage('inc', ({delta}) => {
+      count.set(count.get() + delta);
+    });
+    return {
+      connectedStub,
+      disconnectedStub,
+      activatedStub,
+      deactivatedStub,
+      count,
+    };
+  };
+
+  const definition = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails(),
+    {
+      plugin,
+      Component: MySandyPlugin,
+    },
+  );
+  const {
+    renderer,
+    act,
+    client,
+    store,
+  } = await renderMockFlipperWithPlugin(definition, {archivedDevice: true});
+
+  expect(client.rawSend).not.toBeCalled();
+
+  expect(renderer.baseElement).toMatchInlineSnapshot(`
+    <body>
+      <div>
+        <div
+          class="css-w6yhx2-View-FlexBox-FlexColumn"
+        >
+          <div>
+            Hello from Sandy
+            0
+          </div>
+        </div>
+        <div
+          class="css-724x97-View-FlexBox-FlexRow"
+          id="detailsSidebar"
+        />
+      </div>
+    </body>
+  `);
+  expect(renders).toBe(1);
+
+  // make sure the plugin gets activated, but not connected!
+  const pluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get(definition.id)!.instanceApi;
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(1);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(0);
+
+  // select non existing plugin
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: 'Logs',
+        deepLinkPayload: null,
+      }),
+    );
+  });
+
+  expect(client.rawSend).not.toBeCalled();
+
+  expect(renderer.baseElement).toMatchInlineSnapshot(`
+    <body>
+      <div />
+    </body>
+  `);
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(1);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
+
+  // go back
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: definition.id,
+        deepLinkPayload: null,
+      }),
+    );
+  });
+  // Might be needed, but seems to work reliable without: await sleep(1000);
+  expect(renderer.baseElement).toMatchInlineSnapshot(`
+    <body>
+      <div>
+        <div
+          class="css-w6yhx2-View-FlexBox-FlexColumn"
+        >
+          <div>
+            Hello from Sandy
+            0
+          </div>
+        </div>
+        <div
+          class="css-724x97-View-FlexBox-FlexRow"
+          id="detailsSidebar"
+        />
+      </div>
+    </body>
+  `);
+
+  expect(pluginInstance.count.get()).toBe(0);
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(2);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
+  expect(client.rawSend).not.toBeCalled();
+});
+
+test('PluginContainer triggers correct lifecycles for background plugin', async () => {
+  function MySandyPlugin() {
+    return <div>Hello from Sandy</div>;
+  }
+
+  const plugin = (client: PluginClient) => {
+    expect(client.connected.get()).toBeFalsy();
+    expect(client.isConnected).toBeFalsy();
+    expect(client.device.isConnected).toBeFalsy();
+    expect(client.device.isArchived).toBeTruthy();
+    const connectedStub = jest.fn();
+    const disconnectedStub = jest.fn();
+    const activatedStub = jest.fn();
+    const deactivatedStub = jest.fn();
+    client.onConnect(connectedStub);
+    client.onDisconnect(disconnectedStub);
+    client.onActivate(activatedStub);
+    client.onDeactivate(deactivatedStub);
+    return {connectedStub, disconnectedStub, activatedStub, deactivatedStub};
+  };
+
+  const definition = new _SandyPluginDefinition(
+    TestUtils.createMockPluginDetails(),
+    {
+      plugin,
+      Component: MySandyPlugin,
+    },
+  );
+  const {act, client, store} = await renderMockFlipperWithPlugin(definition, {
+    archivedDevice: true,
+    onSend(_method) {
+      throw new Error('not to be called');
+    },
+  });
+
+  expect(client.rawSend).not.toBeCalled();
+  // make sure the plugin gets connected
+  const pluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get(definition.id)!.instanceApi;
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(1);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(0);
+
+  // select non existing plugin
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: 'Logs',
+        deepLinkPayload: null,
+      }),
+    );
+  });
+  // bg plugin!
+  expect(client.rawSend).not.toBeCalled();
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(1);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
+
+  // go back
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: definition.id,
+        deepLinkPayload: null,
+      }),
+    );
+  });
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(2);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(1);
+  expect(client.rawSend).not.toBeCalled();
+
+  // select something else
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: 'Logs',
+        deepLinkPayload: null,
+      }),
+    );
+  });
+  // select new plugin
+  act(() => {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: definition.id,
+        deepLinkPayload: null,
+      }),
+    );
+  });
+
+  expect(pluginInstance.connectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
+  expect(pluginInstance.activatedStub).toBeCalledTimes(3);
+  expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
+  expect(client.rawSend).not.toBeCalled();
 });

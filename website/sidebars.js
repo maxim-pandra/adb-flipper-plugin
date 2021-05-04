@@ -88,9 +88,13 @@ module.exports = {
       'setup/sandbox-plugin',
       'setup/shared-preferences-plugin',
       'setup/leak-canary-plugin',
+      'setup/leak-canary-2-plugin',
       'setup/crash-reporter-plugin',
     ],
-    Advanced: ['custom-ports', 'stetho'],
+    Advanced: ['custom-ports', 'stetho',
+    ...fbInternalOnly([
+      'fb/www-certificate-exchange'
+    ]),],
   },
   extending: {
     Tutorial: [
@@ -111,6 +115,7 @@ module.exports = {
       'extending/debugging',
       ...fbInternalOnly(['fb/adding-analytics-0']),
       'extending/plugin-distribution',
+      'extending/sandy-migration',
     ],
     'Desktop plugin APIs': [
       'extending/flipper-plugin',

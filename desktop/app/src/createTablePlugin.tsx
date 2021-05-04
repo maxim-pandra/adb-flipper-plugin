@@ -15,7 +15,7 @@ import {
 } from './ui';
 import FlexColumn from './ui/components/FlexColumn';
 import Button from './ui/components/Button';
-import DetailSidebar from './chrome/DetailSidebar';
+import {DetailSidebar} from 'flipper-plugin';
 import {FlipperPlugin} from './plugin';
 import SearchableTable_immutable from './ui/components/searchable/SearchableTable_immutable';
 import textContent from './utils/textContent';
@@ -62,6 +62,8 @@ type State = {
  * An optional resetMethod argument can be provided which will replace the current rows with the
  * data provided. This is useful when connecting to Flipper for this first time, or reconnecting to
  * the client in an unknown state.
+ *
+ * @deprecated use createTablePlugin from flipper-plugin instead
  */
 export function createTablePlugin<T extends RowData>(props: Props<T>) {
   return class extends FlipperPlugin<State, any, PersistedState<T>> {

@@ -16,13 +16,13 @@ import {
   DeviceLogListener,
   Idler,
   createState,
+  _getFlipperLibImplementation,
 } from 'flipper-plugin';
 import {
   DevicePluginDefinition,
   DevicePluginMap,
   FlipperDevicePlugin,
 } from '../plugin';
-import {getFlipperLibImplementation} from '../utils/flipperLibImplementation';
 import {DeviceSpec, OS as PluginOS, PluginDetails} from 'flipper-plugin-lib';
 
 export type DeviceShell = {
@@ -131,7 +131,18 @@ export default class BaseDevice {
     };
   }
 
+  startLogging() {
+    // to be subclassed
+  }
+
+  stopLogging() {
+    // to be subclassed
+  }
+
   addLogListener(callback: DeviceLogListener): Symbol {
+    if (this.logListeners.size === 0) {
+      this.startLogging();
+    }
     const id = Symbol();
     this.logListeners.set(id, callback);
     return id;
@@ -156,6 +167,9 @@ export default class BaseDevice {
 
   removeLogListener(id: Symbol) {
     this.logListeners.delete(id);
+    if (this.logListeners.size === 0) {
+      this.stopLogging();
+    }
   }
 
   navigateToLocation(_location: string) {
@@ -190,7 +204,8 @@ export default class BaseDevice {
         if (plugin instanceof _SandyPluginDefinition) {
           return (
             plugin.isDevicePlugin &&
-            plugin.asDevicePluginModule().supportsDevice(this as any)
+            (plugin.asDevicePluginModule().supportsDevice?.(this as any) ??
+              false)
           );
         } else {
           return plugin.supportsDevice(this);
@@ -238,9 +253,15 @@ export default class BaseDevice {
       this.sandyPluginStates.set(
         plugin.id,
         new _SandyDevicePluginInstance(
-          getFlipperLibImplementation(),
+          _getFlipperLibImplementation(),
           plugin,
           this,
+          // break circular dep, one of those days again...
+          require('../utils/pluginUtils').getPluginKey(
+            undefined,
+            {serial: this.serial},
+            plugin.id,
+          ),
           initialState,
         ),
       );
@@ -261,6 +282,7 @@ export default class BaseDevice {
 
   disconnect() {
     this.logListeners.clear();
+    this.stopLogging();
     this.connected.set(false);
   }
 

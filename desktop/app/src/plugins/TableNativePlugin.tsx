@@ -7,13 +7,12 @@
  * @format
  */
 
-import ManagedDataInspector from '../ui/components/data-inspector/ManagedDataInspector';
+import {DataInspector} from 'flipper-plugin';
 import Panel from '../ui/components/Panel';
 import {colors} from '../ui/components/colors';
 import styled from '@emotion/styled';
 import Text from '../ui/components/Text';
-import Toolbar from '../ui/components/Toolbar';
-import Spacer from '../ui/components/Toolbar';
+import {Spacer} from '../ui/components/Toolbar';
 import Button from '../ui/components/Button';
 import Select from '../ui/components/Select';
 import ErrorBlock from '../ui/components/ErrorBlock';
@@ -27,7 +26,7 @@ import {
   TableColumnOrderVal,
   TableBodyRow,
 } from '../ui/components/table/types';
-import DetailSidebar from '../chrome/DetailSidebar';
+import {DetailSidebar} from 'flipper-plugin';
 import {FlipperPlugin} from '../plugin';
 import textContent from '../utils/textContent';
 import createPaste from '../fb-stubs/createPaste';
@@ -35,6 +34,7 @@ import {ReactNode} from 'react';
 import React from 'react';
 import {KeyboardActions} from '../MenuBar';
 import {BundledPluginDetails} from 'flipper-plugin-lib';
+import {Toolbar} from 'flipper-plugin';
 
 type ID = string;
 
@@ -232,7 +232,7 @@ function renderSidebarSection(
     case 'json':
       return (
         <Panel floating={false} heading={section.title} key={index}>
-          <ManagedDataInspector data={section.content} expandRoot={true} />
+          <DataInspector data={section.content} expandRoot={true} />
         </Panel>
       );
     case 'toolbar':
@@ -240,7 +240,7 @@ function renderSidebarSection(
     default:
       return (
         <Panel floating={false} heading={'Details'} key={index}>
-          <ManagedDataInspector data={section} expandRoot={true} />
+          <DataInspector data={section} expandRoot={true} />
         </Panel>
       );
   }

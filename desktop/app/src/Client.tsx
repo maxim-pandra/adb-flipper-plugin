@@ -7,16 +7,10 @@
  * @format
  */
 
-import {
-  PluginDefinition,
-  isSandyPlugin,
-  FlipperPlugin,
-  FlipperDevicePlugin,
-} from './plugin';
+import {PluginDefinition, FlipperPlugin, FlipperDevicePlugin} from './plugin';
 import BaseDevice, {OS} from './devices/BaseDevice';
 import {Logger} from './fb-interfaces/Logger';
 import {Store} from './reducers/index';
-import {setPluginState} from './reducers/pluginStates';
 import {Payload, ConnectionStatus} from 'rsocket-types';
 import {Flowable, Single} from 'rsocket-flowable';
 import {performance} from 'perf_hooks';
@@ -30,14 +24,18 @@ import invariant from 'invariant';
 import {
   getPluginKey,
   defaultEnabledBackgroundPlugins,
+  isSandyPlugin,
 } from './utils/pluginUtils';
 import {processMessagesLater} from './utils/messageQueue';
 import {emitBytesReceived} from './dispatcher/tracking';
 import {debounce} from 'lodash';
 import {batch} from 'react-redux';
-import {createState, _SandyPluginInstance} from 'flipper-plugin';
+import {
+  createState,
+  _SandyPluginInstance,
+  _getFlipperLibImplementation,
+} from 'flipper-plugin';
 import {flipperMessagesClientPlugin} from './utils/self-inspection/plugins/FlipperMessagesClientPlugin';
-import {getFlipperLibImplementation} from './utils/flipperLibImplementation';
 import {freeze} from 'immer';
 import GK from './fb-stubs/GK';
 import {message} from 'antd';
@@ -66,26 +64,17 @@ type Params = {
 type RequestMetadata = {method: string; id: number; params: Params | undefined};
 
 const handleError = (store: Store, device: BaseDevice, error: ErrorType) => {
-  if (isProduction()) {
+  if (store.getState().settingsState.suppressPluginErrors) {
     return;
   }
-  const crashReporterPlugin: typeof FlipperDevicePlugin = store
-    .getState()
-    .plugins.devicePlugins.get('CrashReporter') as any;
+  const crashReporterPlugin = device.sandyPluginStates.get('CrashReporter');
   if (!crashReporterPlugin) {
     return;
   }
-  if (!crashReporterPlugin.persistedStateReducer) {
-    console.error('CrashReporterPlugin persistedStateReducer broken'); // Make sure we update this code if we ever convert it to Sandy
+  if (!crashReporterPlugin.instanceApi.reportCrash) {
+    console.error('CrashReporterPlugin persistedStateReducer broken');
     return;
   }
-
-  const pluginKey = getPluginKey(null, device, 'CrashReporter');
-
-  const persistedState = {
-    ...crashReporterPlugin.defaultPersistedState,
-    ...store.getState().pluginStates[pluginKey],
-  };
   const isCrashReport: boolean = Boolean(error.name || error.message);
   const payload = isCrashReport
     ? {
@@ -97,23 +86,7 @@ const handleError = (store: Store, device: BaseDevice, error: ErrorType) => {
         name: 'Plugin Error',
         reason: JSON.stringify(error),
       };
-
-  const newPluginState =
-    crashReporterPlugin.persistedStateReducer == null
-      ? persistedState
-      : crashReporterPlugin.persistedStateReducer(
-          persistedState,
-          'flipper-crash-report',
-          payload,
-        );
-  if (persistedState !== newPluginState) {
-    store.dispatch(
-      setPluginState({
-        pluginKey,
-        state: newPluginState,
-      }),
-    );
-  }
+  crashReporterPlugin.instanceApi.reportCrash(payload);
 };
 
 export interface FlipperClientConnection<D, M> {
@@ -176,7 +149,7 @@ export default class Client extends EventEmitter {
     device: BaseDevice,
   ) {
     super();
-    this.connected.set(true);
+    this.connected.set(!!conn);
     this.plugins = plugins ? plugins : [];
     this.backgroundPlugins = [];
     this.connection = conn;
@@ -254,9 +227,10 @@ export default class Client extends EventEmitter {
         this.sandyPluginStates.set(
           plugin.id,
           new _SandyPluginInstance(
-            getFlipperLibImplementation(),
+            _getFlipperLibImplementation(),
             plugin,
             this,
+            getPluginKey(this.id, {serial: this.query.device_id}, plugin.id),
             initialStates[pluginId],
           ),
         );
@@ -303,7 +277,12 @@ export default class Client extends EventEmitter {
       // TODO: needs to be wrapped in error tracking T68955280
       this.sandyPluginStates.set(
         plugin.id,
-        new _SandyPluginInstance(getFlipperLibImplementation(), plugin, this),
+        new _SandyPluginInstance(
+          _getFlipperLibImplementation(),
+          plugin,
+          this,
+          getPluginKey(this.id, {serial: this.query.device_id}, plugin.id),
+        ),
       );
     }
   }
@@ -354,10 +333,9 @@ export default class Client extends EventEmitter {
     if (this.sdkVersion < 4) {
       return [];
     }
-    return await this.rawCall<{plugins: Plugins}>(
-      'getBackgroundPlugins',
-      false,
-    ).then((data) => data.plugins);
+    return this.rawCall<{plugins: Plugins}>('getBackgroundPlugins', false).then(
+      (data) => data.plugins,
+    );
   }
 
   // get the plugins, and update the UI
@@ -641,7 +619,10 @@ export default class Client extends EventEmitter {
             }
           },
           onError: (e) => {
-            reject(e);
+            // This is only called if the connection is dead. Not in expected
+            // and recoverable cases like a missing receiver/method.
+            this.disconnect();
+            reject(new Error('Connection disconnected: ' + e));
           },
         });
       } else {
@@ -714,8 +695,10 @@ export default class Client extends EventEmitter {
 
   initPlugin(pluginId: string) {
     this.activePlugins.add(pluginId);
-    this.rawSend('init', {plugin: pluginId});
-    this.sandyPluginStates.get(pluginId)?.connect();
+    if (this.connected.get()) {
+      this.rawSend('init', {plugin: pluginId});
+      this.sandyPluginStates.get(pluginId)?.connect();
+    }
   }
 
   deinitPlugin(pluginId: string) {
@@ -754,7 +737,21 @@ export default class Client extends EventEmitter {
     params?: Object,
   ): Promise<Object> {
     return reportPluginFailures(
-      this.rawCall('execute', fromPlugin, {api, method, params}),
+      this.rawCall<Object>('execute', fromPlugin, {
+        api,
+        method,
+        params,
+      }).catch((err) => {
+        // We only throw errors if the connection is still alive
+        // as connection-related ones aren't recoverable from
+        // user code.
+        if (this.connected.get()) {
+          throw err;
+        }
+        // This effectively preserves the previous behavior
+        // of ignoring disconnection-related call failures.
+        return {};
+      }),
       `Call-${method}`,
       api,
     );
